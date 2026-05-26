@@ -7,6 +7,9 @@ from app.database import init_db
 from app.routers.health import router as health_router
 from app.routers.analytics import router as analytics_router
 from app.routers.websocket import router as ws_router
+from app.routers.proxy import router as proxy_router
+from app.adapters.registry import known_providers
+from app.services.session_service import reset_session
 
 
 @asynccontextmanager
@@ -33,3 +36,15 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(analytics_router)
 app.include_router(ws_router)
+app.include_router(proxy_router)
+
+
+@app.get("/providers")
+async def list_providers():
+    return {"providers": known_providers()}
+
+
+@app.post("/session/reset")
+async def session_reset():
+    reset_session()
+    return {"status": "ok", "message": "Session reset. Next request creates a new session."}
