@@ -29,7 +29,7 @@ interface CacheMetrics {
 export default function CostsPage() {
   const { data: costsData = [], isLoading: costsLoading } = useQuery<ProviderCostRow[]>({
     queryKey: ["costs"],
-    queryFn: fetchCosts,
+    queryFn: () => fetchCosts(),
     refetchInterval: 15_000,
   });
   const { data: tokenData = [] } = useQuery<TokenUsageSummary[]>({
@@ -44,7 +44,7 @@ export default function CostsPage() {
   });
   const { data: cache, isLoading: cacheLoading } = useQuery<CacheMetrics>({
     queryKey: ["cache"],
-    queryFn: fetchCacheMetrics,
+    queryFn: () => fetchCacheMetrics(),
     refetchInterval: 15_000,
   });
 

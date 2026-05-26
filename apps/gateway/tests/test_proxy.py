@@ -58,9 +58,9 @@ OPENAI_STREAM = (
 @pytest.fixture(autouse=True)
 def reset_session():
     from app.services import session_service
-    session_service._active_session_id = None
+    session_service._sessions.clear()
     yield
-    session_service._active_session_id = None
+    session_service._sessions.clear()
 
 
 # ── non-streaming tests ───────────────────────────────────────────────────────

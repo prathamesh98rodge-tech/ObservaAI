@@ -93,9 +93,16 @@ export class SessionManager extends EventEmitter {
       .get<string>("gatewayUrl", "http://localhost:8000");
   }
 
+  private teamHeaders(): Record<string, string> {
+    const key = vscode.workspace
+      .getConfiguration("observaai")
+      .get<string>("teamApiKey", "");
+    return key ? { "X-ObservaAI-Team-Key": key } : {};
+  }
+
   private async fetchMetrics() {
     try {
-      const res = await fetch(`${this.gatewayUrl()}/analytics/live`);
+      const res = await fetch(`${this.gatewayUrl()}/analytics/live`, { headers: this.teamHeaders() });
       if (res.ok) {
         const data = await res.json() as LiveMetrics;
         this.state = { ...this.state, ...data, gatewayOnline: true };
@@ -110,7 +117,7 @@ export class SessionManager extends EventEmitter {
 
   private async fetchOllamaMetrics() {
     try {
-      const res = await fetch(`${this.gatewayUrl()}/ollama/ps`);
+      const res = await fetch(`${this.gatewayUrl()}/ollama/ps`, { headers: this.teamHeaders() });
       if (res.ok) {
         const data = await res.json() as { models: OllamaRunningModel[] };
         this.state = { ...this.state, ollamaRunning: data.models ?? [] };
@@ -123,7 +130,7 @@ export class SessionManager extends EventEmitter {
 
   private async fetchBudgetAlerts() {
     try {
-      const res = await fetch(`${this.gatewayUrl()}/budgets/alerts`);
+      const res = await fetch(`${this.gatewayUrl()}/budgets/alerts`, { headers: this.teamHeaders() });
       if (!res.ok) return;
       const data = await res.json() as { alerts: BudgetAlert[] };
       const alerts = data.alerts ?? [];

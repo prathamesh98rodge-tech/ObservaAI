@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.adapters.registry import get_adapter
 from app.database import get_db
 from app.services.request_store import record_request
+from app.services.team_service import get_team_id
 
 router = APIRouter(tags=["proxy"])
 
@@ -51,6 +52,7 @@ async def proxy(
     request: Request,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    team_id: str | None = Depends(get_team_id),
 ):
     try:
         adapter, cfg = get_adapter(provider)
@@ -96,6 +98,7 @@ async def proxy(
                 body=raw_body,
                 temperature=temperature,
                 db=db,
+                team_id=team_id,
             ),
             media_type="text/event-stream",
             headers={
@@ -134,6 +137,7 @@ async def proxy(
         latency_ms=latency_ms,
         streaming=False,
         temperature=temperature,
+        team_id=team_id,
     )
 
     resp_headers = {
@@ -161,6 +165,7 @@ async def _stream_proxy(
     body: bytes,
     temperature: float | None,
     db: AsyncSession,
+    team_id: str | None = None,
 ) -> AsyncGenerator[bytes, None]:
     accumulated: list[bytes] = []
     start = time.monotonic()
@@ -193,6 +198,7 @@ async def _stream_proxy(
         latency_ms=latency_ms,
         streaming=True,
         temperature=temperature,
+        team_id=team_id,
     )
 
 
