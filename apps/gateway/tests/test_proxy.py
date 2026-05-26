@@ -216,3 +216,18 @@ def test_analytics_live_empty():
     data = res.json()
     assert "usageByProvider" in data
     assert "sessionTokens" in data
+
+
+def test_analytics_timeline_empty():
+    with TestClient(app) as client:
+        res = client.get("/analytics/timeline")
+    assert res.status_code == 200
+    assert isinstance(res.json(), list)
+
+
+def test_analytics_timeline_granularity_and_limit():
+    with TestClient(app) as client:
+        for granularity in ("minute", "hour", "day"):
+            res = client.get(f"/analytics/timeline?granularity={granularity}&limit=10")
+            assert res.status_code == 200
+            assert isinstance(res.json(), list)

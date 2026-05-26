@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -100,6 +102,67 @@ async def cost_breakdown(db: AsyncSession = Depends(get_db)):
             "provider": r.provider,
             "total_cost": round(r.total_cost or 0.0, 6),
             "total_tokens": r.total_tokens or 0,
+        }
+        for r in rows
+    ]
+
+
+@router.get("/timeline")
+async def timeline(
+    granularity: Literal["minute", "hour", "day"] = Query("hour"),
+    limit: int = Query(24, ge=1, le=168),
+    db: AsyncSession = Depends(get_db),
+):
+    fmt = {
+        "minute": "%Y-%m-%dT%H:%M:00",
+        "hour":   "%Y-%m-%dT%H:00:00",
+        "day":    "%Y-%m-%dT00:00:00",
+    }[granularity]
+
+    bucket = func.strftime(fmt, Request.created_at).label("period")
+
+    stmt = (
+        select(
+            bucket,
+            func.sum(Request.input_tokens).label("input_tokens"),
+            func.sum(Request.output_tokens).label("output_tokens"),
+            func.sum(Request.estimated_cost).label("cost"),
+            func.count(Request.id).label("requests"),
+        )
+        .group_by(bucket)
+        .order_by(bucket.asc())
+        .limit(limit)
+    )
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    # Collect distinct providers per bucket in a second query (cheap, one round-trip)
+    if rows:
+        periods = [r.period for r in rows]
+        bucket2 = func.strftime(fmt, Request.created_at).label("period")
+        prov_stmt = (
+            select(bucket2, Request.provider)
+            .where(func.strftime(fmt, Request.created_at).in_(periods))
+            .distinct()
+        )
+        prov_result = await db.execute(prov_stmt)
+        from collections import defaultdict
+        providers_map: dict[str, list[str]] = defaultdict(list)
+        for period, provider in prov_result.all():
+            if provider not in providers_map[period]:
+                providers_map[period].append(provider)
+    else:
+        providers_map = {}
+
+    return [
+        {
+            "period": r.period,
+            "input_tokens": r.input_tokens or 0,
+            "output_tokens": r.output_tokens or 0,
+            "cost": round(r.cost or 0.0, 6),
+            "requests": r.requests,
+            "providers": providers_map.get(r.period, []),
         }
         for r in rows
     ]
