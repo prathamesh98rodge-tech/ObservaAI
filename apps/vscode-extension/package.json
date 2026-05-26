@@ -70,6 +70,16 @@
       {
         "command": "observaai.copyProxyUrl",
         "title": "ObservaAI: Copy Proxy URL…"
+      },
+      {
+        "command": "observaai.updateSubscriptionUsage",
+        "title": "ObservaAI: Update Subscription Usage",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "observaai.prepareHandover",
+        "title": "ObservaAI: Prepare Handover (Switch Provider)",
+        "icon": "$(arrow-swap)"
       }
     ],
     "menus": {

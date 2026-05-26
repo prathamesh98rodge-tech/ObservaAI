@@ -24,17 +24,34 @@ export interface BudgetAlert {
   period: string;
 }
 
+export interface SubscriptionCapacity {
+  provider: string;
+  plan: string;
+  hourly_used: number;
+  hourly_limit: number;
+  hourly_pct: number | null;
+  daily_used: number;
+  daily_limit: number;
+  daily_pct: number | null;
+  weekly_used: number;
+  weekly_limit: number;
+  weekly_pct: number | null;
+  recorded_at: string;
+}
+
 export interface ExtendedMetrics extends LiveMetrics {
   gatewayOnline: boolean;
   wsConnected: boolean;
   ollamaRunning: OllamaRunningModel[];
   budgetAlerts: BudgetAlert[];
   cacheActive: boolean;
+  subscriptionUsages: SubscriptionCapacity[];
 }
 
 const POLL_INTERVAL_MS = 8_000;
 const OLLAMA_POLL_INTERVAL_MS = 15_000;
 const BUDGET_POLL_INTERVAL_MS = 30_000;
+const SUBSCRIPTION_POLL_INTERVAL_MS = 60_000;
 const WS_RECONNECT_BASE_MS = 2_000;
 const WS_RECONNECT_MAX_MS = 30_000;
 
@@ -45,6 +62,7 @@ export class SessionManager extends EventEmitter {
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private ollamaTimer: ReturnType<typeof setInterval> | null = null;
   private budgetTimer: ReturnType<typeof setInterval> | null = null;
+  private subscriptionTimer: ReturnType<typeof setInterval> | null = null;
   private wsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private wsReconnectDelay = WS_RECONNECT_BASE_MS;
   private wsIntentionalClose = false;
@@ -66,6 +84,9 @@ export class SessionManager extends EventEmitter {
     this.fetchBudgetAlerts();
     this.budgetTimer = setInterval(() => this.fetchBudgetAlerts(), BUDGET_POLL_INTERVAL_MS);
 
+    this.fetchSubscriptions();
+    this.subscriptionTimer = setInterval(() => this.fetchSubscriptions(), SUBSCRIPTION_POLL_INTERVAL_MS);
+
     // Check cache status alongside regular poll
     this.fetchCacheStatus();
   }
@@ -85,6 +106,7 @@ export class SessionManager extends EventEmitter {
     if (this.pollTimer) clearInterval(this.pollTimer);
     if (this.ollamaTimer) clearInterval(this.ollamaTimer);
     if (this.budgetTimer) clearInterval(this.budgetTimer);
+    if (this.subscriptionTimer) clearInterval(this.subscriptionTimer);
     if (this.wsReconnectTimer) clearTimeout(this.wsReconnectTimer);
     this.ws?.close();
   }
@@ -119,6 +141,16 @@ export class SessionManager extends EventEmitter {
     } catch {
       this.setOffline();
     }
+  }
+
+  private async fetchSubscriptions() {
+    try {
+      const res = await fetch(`${this.gatewayUrl()}/subscriptions`, { headers: this.teamHeaders() });
+      if (!res.ok) return;
+      const data = await res.json() as { subscriptions: SubscriptionCapacity[] };
+      this.state = { ...this.state, subscriptionUsages: data.subscriptions ?? [] };
+      this.emit("update", this.state);
+    } catch { /* gateway offline — leave existing state */ }
   }
 
   private async fetchCacheStatus() {
@@ -253,6 +285,7 @@ export class SessionManager extends EventEmitter {
       ollamaRunning: [],
       budgetAlerts: [],
       cacheActive: false,
+      subscriptionUsages: [],
     };
   }
 }

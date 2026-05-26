@@ -112,6 +112,61 @@ export async function deleteBudget(id: string) {
 
 export const GATEWAY_WS_URL = GATEWAY_URL.replace(/^http/, "ws") + "/ws/metrics";
 
+// ── subscriptions API ─────────────────────────────────────────────────────────
+
+export interface SubscriptionCapacity {
+  id: string;
+  provider: string;
+  plan: string;
+  hourly_limit: number;
+  daily_limit: number;
+  weekly_limit: number;
+  hourly_used: number;
+  daily_used: number;
+  weekly_used: number;
+  hourly_pct: number | null;
+  daily_pct: number | null;
+  weekly_pct: number | null;
+  estimated_cost_usd: number;
+  recorded_at: string;
+}
+
+export async function fetchSubscriptions(): Promise<SubscriptionCapacity[]> {
+  const res = await fetch(`${GATEWAY_URL}/subscriptions`);
+  if (!res.ok) throw new Error("Failed to fetch subscriptions");
+  const data = await res.json();
+  return data.subscriptions ?? [];
+}
+
+export async function ingestSubscription(body: {
+  provider: string;
+  plan?: string;
+  hourly_limit?: number;
+  daily_limit?: number;
+  weekly_limit?: number;
+  hourly_used?: number;
+  daily_used?: number;
+  weekly_used?: number;
+}): Promise<SubscriptionCapacity> {
+  const res = await fetch(`${GATEWAY_URL}/subscriptions/ingest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error("Failed to ingest subscription usage");
+  return res.json();
+}
+
+export async function fetchRecommendation(): Promise<{
+  recommended: string | null;
+  reason: string;
+  snapshot: SubscriptionCapacity | null;
+}> {
+  const res = await fetch(`${GATEWAY_URL}/subscriptions/recommend`);
+  if (!res.ok) throw new Error("Failed to fetch recommendation");
+  return res.json();
+}
+
 // ── teams API ─────────────────────────────────────────────────────────────────
 
 export interface Team {

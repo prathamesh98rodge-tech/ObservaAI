@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, BarChart2, DollarSign, History, Settings, Zap, Bell, Users, ChevronDown } from "lucide-react";
+import { LayoutDashboard, BarChart2, DollarSign, History, Settings, Zap, Bell, Users, ChevronDown, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMetricsStore } from "@/lib/store";
 import { useQuery } from "@tanstack/react-query";
@@ -14,8 +14,9 @@ const NAV = [
   { href: "/costs",     label: "Costs",     icon: DollarSign },
   { href: "/budgets",   label: "Budgets",   icon: Bell },
   { href: "/sessions",  label: "Sessions",  icon: History },
-  { href: "/teams",     label: "Teams",     icon: Users },
-  { href: "/routing",   label: "Routing",   icon: Zap },
+  { href: "/teams",          label: "Teams",         icon: Users },
+  { href: "/subscriptions",  label: "Subscriptions", icon: Activity },
+  { href: "/routing",        label: "Routing",       icon: Zap },
   { href: "/settings",  label: "Settings",  icon: Settings },
 ];
 

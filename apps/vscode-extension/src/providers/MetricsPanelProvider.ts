@@ -114,6 +114,16 @@ export class MetricsPanelProvider implements vscode.WebviewViewProvider {
   .vram-fill { height: 100%; border-radius: 2px; background: #a855f7; }
   .vram-label { font-size: 10px; font-family: var(--vscode-editor-font-family, monospace); color: var(--vscode-descriptionForeground); white-space: nowrap; }
 
+  /* ── subscription capacity bars ── */
+  .cap-card { border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; background: var(--vscode-editor-inactiveSelectionBackground); }
+  .cap-title { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+  .cap-row { margin-bottom: 5px; }
+  .cap-meta { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; }
+  .cap-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: var(--vscode-descriptionForeground); }
+  .cap-val { font-size: 10px; font-family: var(--vscode-editor-font-family, monospace); }
+  .cap-bar-wrap { height: 5px; border-radius: 3px; background: var(--vscode-panel-border); overflow: hidden; }
+  .cap-bar-fill { height: 100%; border-radius: 3px; transition: width .3s; }
+
   /* ── empty state ── */
   .empty { text-align: center; padding: 24px 8px; color: var(--vscode-descriptionForeground); font-size: 11px; line-height: 1.6; }
 
@@ -226,6 +236,44 @@ export class MetricsPanelProvider implements vscode.WebviewViewProvider {
       }).join('');
     }
 
+    function capColor(pct) {
+      if (pct === null || pct === undefined) return '#64748b';
+      if (pct >= 80) return '#f87171';
+      if (pct >= 50) return '#fbbf24';
+      return '#34d399';
+    }
+
+    function renderCapBar(label, used, limit, pct) {
+      if (limit <= 0) return '';
+      const color = capColor(pct);
+      const width = Math.min(pct ?? 0, 100);
+      return \`
+        <div class="cap-row">
+          <div class="cap-meta">
+            <span class="cap-lbl">\${label}</span>
+            <span class="cap-val" style="color:\${color}">\${used.toLocaleString()} / \${limit.toLocaleString()} (\${(pct??0).toFixed(0)}%)</span>
+          </div>
+          <div class="cap-bar-wrap"><div class="cap-bar-fill" style="width:\${width}%;background:\${color}"></div></div>
+        </div>
+      \`;
+    }
+
+    function renderSubscriptions(subs) {
+      if (!subs || !subs.length) return '';
+      const PROV_COLORS = { claude: '#f97316', openai: '#10b981', gemini: '#3b82f6' };
+      return '<div class="sec-hdr">Subscription Capacity</div>' + subs.map(s => {
+        const color = PROV_COLORS[s.provider] || '#64748b';
+        return \`
+          <div class="cap-card">
+            <div class="cap-title" style="color:\${color}">\${s.provider.charAt(0).toUpperCase()+s.provider.slice(1)}\${s.plan ? ' · '+s.plan : ''}</div>
+            \${renderCapBar('Hourly', s.hourly_used, s.hourly_limit, s.hourly_pct)}
+            \${renderCapBar('Daily', s.daily_used, s.daily_limit, s.daily_pct)}
+            \${renderCapBar('Weekly', s.weekly_used, s.weekly_limit, s.weekly_pct)}
+          </div>
+        \`;
+      }).join('');
+    }
+
     function renderActions() {
       return \`
         <div class="actions">
@@ -243,6 +291,7 @@ export class MetricsPanelProvider implements vscode.WebviewViewProvider {
       document.getElementById('root').innerHTML =
         renderConn(m) +
         renderBudgetAlerts(m.budgetAlerts) +
+        renderSubscriptions(m.subscriptionUsages) +
         (hasData ? renderSummary(m) : '') +
         renderProviders(m.usageByProvider) +
         renderOllama(m.ollamaRunning) +

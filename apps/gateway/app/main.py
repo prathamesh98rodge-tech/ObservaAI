@@ -12,6 +12,8 @@ from app.routers.ollama_health import router as ollama_health_router
 from app.routers.budgets import router as budgets_router
 from app.routers.teams import router as teams_router
 from app.routers.estimate import router as estimate_router
+from app.routers.subscriptions import router as subscriptions_router
+from app.routers.handover import router as handover_router
 from app.adapters.registry import known_providers
 from app.services.session_service import reset_all_sessions
 
@@ -45,6 +47,8 @@ app.include_router(ollama_health_router)
 app.include_router(budgets_router)
 app.include_router(teams_router)
 app.include_router(estimate_router)
+app.include_router(subscriptions_router)
+app.include_router(handover_router)
 
 
 @app.get("/providers")
