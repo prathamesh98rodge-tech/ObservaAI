@@ -1,0 +1,74 @@
+{
+  "name": "observaai-vscode",
+  "displayName": "ObservaAI",
+  "description": "Unified AI usage monitor and multi-provider analytics for VS Code",
+  "version": "0.1.0",
+  "publisher": "observaai",
+  "private": true,
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": ["Other", "Machine Learning"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "observaai",
+          "title": "ObservaAI",
+          "icon": "$(pulse)"
+        }
+      ]
+    },
+    "views": {
+      "observaai": [
+        {
+          "id": "observaai.metrics",
+          "name": "Live Metrics",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "observaai.openDashboard",
+        "title": "ObservaAI: Open Dashboard"
+      },
+      {
+        "command": "observaai.resetSession",
+        "title": "ObservaAI: Reset Session"
+      }
+    ],
+    "configuration": {
+      "title": "ObservaAI",
+      "properties": {
+        "observaai.gatewayUrl": {
+          "type": "string",
+          "default": "http://localhost:8000",
+          "description": "URL of the ObservaAI gateway"
+        },
+        "observaai.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable ObservaAI telemetry collection"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/extension/index.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
+    "dev": "npm run build -- --watch",
+    "typecheck": "tsc --noEmit",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "@observaai/shared-types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "@types/vscode": "^1.95.0",
+    "esbuild": "^0.25.5",
+    "typescript": "^5.8.3"
+  }
+}
