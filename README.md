@@ -170,6 +170,35 @@ Commands (all under `ObservaAI:` in the command palette):
 - Test Gateway Connection
 - Copy Proxy URL…
 
+### JetBrains plugin (IntelliJ IDEA, PyCharm, GoLand, …)
+
+> **Requires:** JDK 21 · Gradle 8+ · network access to download IntelliJ SDK (~600 MB, one-time)
+
+1. Build the plugin ZIP:
+   ```bash
+   make build-jetbrains
+   # or: cd apps/jetbrains-plugin && ./gradlew buildPlugin
+   ```
+   Output: `apps/jetbrains-plugin/build/distributions/observaai-jetbrains-0.1.0.zip`
+
+2. In your JetBrains IDE: **Settings → Plugins → ⚙ → Install Plugin from Disk…** → select the ZIP.
+
+3. Restart the IDE. **ObservaAI** appears in the right tool-window stripe and the status bar.
+
+Configure under **Settings → Tools → ObservaAI**:
+
+| Setting | Default | Notes |
+|---|---|---|
+| Gateway URL | `http://localhost:8000` | URL of the running ObservaAI gateway |
+| Team API Key | _(blank)_ | `obs-…` key scopes metrics to your workspace |
+| Enabled | `true` | Disable to pause telemetry collection |
+
+**Features:**
+- Live metrics panel (tokens, cost, avg latency, per-provider breakdown)
+- Status bar widget: `⬡ 12.3K · $0.04` — click to open the metrics panel
+- Budget alerts as IDE balloon notifications (warning / exceeded)
+- Dark/light theme aware
+
 ---
 
 ## Configuration
@@ -279,7 +308,7 @@ If you deploy the gateway behind a public hostname:
 - [ ] Cost-budget alerts (per-workspace, per-provider)
 - [ ] Prompt cache hit-rate metrics
 - [ ] Marketplace release of the VS Code extension
-- [ ] JetBrains plugin
+- [x] JetBrains plugin (IntelliJ, PyCharm, GoLand, …)
 - [ ] Per-team / multi-workspace mode
 
 ---

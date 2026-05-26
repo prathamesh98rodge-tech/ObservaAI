@@ -1,20 +1,21 @@
-.PHONY: help install dev up down logs test typecheck build clean reset migrate migrate-new
+.PHONY: help install dev up down logs test typecheck build build-jetbrains clean reset migrate migrate-new
 
 help:
 	@echo "ObservaAI — make targets"
 	@echo ""
-	@echo "  make install     Install all deps (Node + Python venv)"
-	@echo "  make dev         Run gateway + dashboard in dev mode (foreground)"
-	@echo "  make up          Start everything in Docker (detached)"
-	@echo "  make down        Stop Docker stack"
-	@echo "  make logs        Tail Docker logs"
-	@echo "  make test        Run gateway pytest suite"
-	@echo "  make typecheck   Type-check all TS apps + Python"
-	@echo "  make build       Build dashboard + extension bundles"
-	@echo "  make migrate     Apply pending Alembic migrations (Postgres)"
-	@echo "  make migrate-new Run autogenerate to create a new migration"
-	@echo "  make clean       Remove build artifacts, caches, venv"
-	@echo "  make reset       Drop the local SQLite database"
+	@echo "  make install          Install all deps (Node + Python venv)"
+	@echo "  make dev              Run gateway + dashboard in dev mode (foreground)"
+	@echo "  make up               Start everything in Docker (detached)"
+	@echo "  make down             Stop Docker stack"
+	@echo "  make logs             Tail Docker logs"
+	@echo "  make test             Run gateway pytest suite"
+	@echo "  make typecheck        Type-check all TS apps + Python"
+	@echo "  make build            Build dashboard + VS Code extension bundles"
+	@echo "  make build-jetbrains  Build JetBrains plugin ZIP (requires JDK 21 + network)"
+	@echo "  make migrate          Apply pending Alembic migrations (Postgres)"
+	@echo "  make migrate-new      Run autogenerate to create a new migration"
+	@echo "  make clean            Remove build artifacts, caches, venv"
+	@echo "  make reset            Drop the local SQLite database"
 
 install:
 	pnpm install
@@ -51,6 +52,9 @@ typecheck:
 build:
 	pnpm --filter @observaai/dashboard build
 	pnpm --filter observaai-vscode build
+
+build-jetbrains:
+	cd apps/jetbrains-plugin && ./gradlew buildPlugin
 
 clean:
 	rm -rf node_modules apps/*/node_modules apps/*/.next apps/*/dist apps/*/.turbo

@@ -11,3 +11,5 @@ __pycache__/
 .env.local
 *.vsix
 .DS_Store
+apps/jetbrains-plugin/.gradle/
+apps/jetbrains-plugin/build/
