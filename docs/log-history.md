@@ -32,8 +32,8 @@ URLs: Gateway → http://localhost:8000 | Dashboard → http://localhost:3000
 | CI/CD | GitHub Actions: ci.yml, release-vscode.yml, release-jetbrains.yml | — |
 
 **Active branch:** `main`  
-**Last completed week:** Week 10 — Context window %, cache expiry, rate-limit windows, `/estimate`, error analytics  
-**Next up:** Week 11 — Cost forecasting + anomaly detection
+**Last completed week:** Week 11a — Subscription capacity tracking + provider handover  
+**Next up:** Week 11b — Browser companion extension (MV3) for automatic ingestion from claude.ai / chat.openai.com / gemini.google.com
 
 ---
 
@@ -55,16 +55,20 @@ ObservaAI/
 │   │   │   │   ├── ollama.py
 │   │   │   │   └── openrouter.py
 │   │   │   ├── models/
-│   │   │   │   ├── session.py    Session model (id, team_id, workspace, started_at)
-│   │   │   │   ├── request.py    Request model (tokens, cost, latency, cache_savings_usd)
-│   │   │   │   ├── budget.py     Budget model (label, provider, period, limit_usd, alert_pct)
-│   │   │   │   └── team.py       Team + TeamApiKey models (obs- prefixed keys)
+│   │   │   │   ├── session.py        Session model (id, team_id, workspace, started_at)
+│   │   │   │   ├── request.py        Request model (tokens, cost, latency, cache_savings_usd, context_pct, cache_expires_at, status_code)
+│   │   │   │   ├── budget.py         Budget model (label, provider, period, limit_usd, alert_pct)
+│   │   │   │   ├── team.py           Team + TeamApiKey models (obs- prefixed keys)
+│   │   │   │   └── subscription.py   SubscriptionUsage model (provider, plan, hourly/daily/weekly used+limit, recorded_at)
 │   │   │   ├── routers/
-│   │   │   │   ├── proxy.py      POST /proxy/{provider}/{path} — transparent proxy
-│   │   │   │   ├── analytics.py  /analytics/live|tokens|costs|cache|timeline|sessions
-│   │   │   │   ├── budgets.py    CRUD + /budgets/alerts
-│   │   │   │   ├── teams.py      CRUD teams + API keys
-│   │   │   │   └── websocket.py  ws://localhost:8000/ws/metrics
+│   │   │   │   ├── proxy.py           POST /proxy/{provider}/{path} — transparent proxy
+│   │   │   │   ├── analytics.py       /analytics/live|tokens|costs|cache|timeline|sessions|rate-limits|errors
+│   │   │   │   ├── budgets.py         CRUD + /budgets/alerts
+│   │   │   │   ├── teams.py           CRUD teams + API keys
+│   │   │   │   ├── estimate.py        POST /estimate — pre-flight token+cost estimate
+│   │   │   │   ├── subscriptions.py   POST /subscriptions/ingest | GET /subscriptions | GET /subscriptions/recommend
+│   │   │   │   ├── handover.py        POST /handover/generate — markdown context-switch doc
+│   │   │   │   └── websocket.py       ws://localhost:8000/ws/metrics
 │   │   │   └── services/
 │   │   │       ├── pricing.py        Cost + cache savings estimation
 │   │   │       ├── request_store.py  record_request() — DB insert + WS broadcast
@@ -72,7 +76,7 @@ ObservaAI/
 │   │   │       ├── metrics_bus.py    async pub/sub MetricsBus
 │   │   │       ├── budget_checker.py runs after every request, webhook on alert
 │   │   │       └── team_service.py   get_team_id FastAPI dependency (X-ObservaAI-Team-Key)
-│   │   ├── alembic/              Async migrations (001–005)
+│   │   ├── alembic/              Async migrations (001–009)
 │   │   ├── tests/                pytest + aiosqlite in-memory
 │   │   └── requirements.txt
 │   │
@@ -82,9 +86,10 @@ ObservaAI/
 │   │       │   ├── page.tsx          Overview (LiveOverview)
 │   │       │   ├── providers/        Per-provider token table
 │   │       │   ├── costs/            Donut + area charts, cache hit-rate
-│   │       │   ├── sessions/         Collapsible session list + request drill-down
+│   │       │   ├── sessions/         Collapsible session list + request drill-down (ctx%, cache badge)
 │   │       │   ├── budgets/          Create/edit/delete budgets, live spend bars
-│   │       │   └── teams/            Create teams, manage API keys
+│   │       │   ├── teams/            Create teams, manage API keys
+│   │       │   └── subscriptions/    Capacity bars per provider + ingest form + recommendation banner
 │   │       ├── components/
 │   │       │   ├── charts/           ProviderDonutChart, CostAreaChart, etc.
 │   │       │   └── layout/Sidebar.tsx Team switcher + nav
@@ -127,7 +132,8 @@ ObservaAI/
 │   ├── log-history.md            ← YOU ARE HERE — session context file
 │   ├── CHANGELOG.md              Same history in CHANGELOG format
 │   ├── BEGINNER_GUIDE.md         Zero-to-running guide for first-time users
-│   └── assets/logo.svg           ObservaAI lighthouse SVG logo
+│   ├── assets/logo.svg           ObservaAI lighthouse SVG logo
+│   └── assets/ObservaAI.png      ObservaAI brand logo (PNG — used in README)
 │
 ├── .github/
 │   ├── workflows/
@@ -234,6 +240,41 @@ ObservaAI/
 - **CI fixes**: Removed explicit `version:` from `pnpm/action-setup@v4` in `ci.yml` and `release-vscode.yml` — action reads `packageManager` from `package.json` automatically; specifying both causes `ERR_PNPM_BAD_PM_VERSION`
 - **Tests**: 10 new tests for Week 10 features (context_window_pct, estimate_tokens, /estimate, /rate-limits, /errors)
 
+### Week 11a — Subscription capacity tracking + provider handover
+**Commit:** `ead5b7f`
+
+**Problem being solved:** Users with Claude Pro / ChatGPT Plus / Gemini Pro subscriptions never route traffic through the ObservaAI proxy, so usage is invisible. During long coding sessions, Claude hits its rate limit → user manually saves context → switches provider → repeats setup. This sprint makes ObservaAI useful for subscription users too.
+
+**Gateway changes**
+- `SubscriptionUsage` SQLAlchemy model: `provider`, `plan`, `hourly/daily/weekly_used`, `hourly/daily/weekly_limit`, `estimated_cost_usd`, `recorded_at`
+- Alembic migration `009_subscription_usage.py`
+- `POST /subscriptions/ingest` — records a manual usage snapshot; computes `hourly_pct`, `daily_pct`, `weekly_pct` on the fly
+- `GET /subscriptions` — returns latest snapshot per provider (subquery: `MAX(recorded_at) GROUP BY provider`)
+- `GET /subscriptions/recommend` — sorts providers by `hourly_pct` ascending; ties broken by PROVIDER_ORDER (claude → openai → gemini); returns `recommended`, `reason`, `snapshot`
+- `POST /handover/generate` — pure text generation, no DB; body: `{current_provider, next_provider, goal, context_summary, files_in_scope?, last_message?}`; returns formatted markdown doc the user pastes into the next provider's chat
+
+**VS Code extension changes**
+- `SubscriptionCapacity` interface added to `SessionManager.ts`
+- `subscriptionUsages: SubscriptionCapacity[]` field on `ExtendedMetrics`; `SUBSCRIPTION_POLL_INTERVAL_MS = 60_000`
+- `fetchSubscriptions()` polls `GET /subscriptions` every 60 s
+- `MetricsPanelProvider.ts`: new CSS classes `.cap-card`, `.cap-bar-wrap`, `.cap-bar-fill`; `renderSubscriptions()` JS function with `capColor()` (green/yellow/red thresholds); bars appear above the API-traffic provider cards
+- Two new command palette commands:
+  - `ObservaAI: Update Subscription Usage` — guided QuickPick + InputBox flow → POST to `/subscriptions/ingest`
+  - `ObservaAI: Prepare Handover (Switch Provider)` — fetches recommendation, walks through QuickPicks, calls `/handover/generate`, copies markdown to clipboard
+
+**Dashboard changes**
+- `apps/dashboard/src/lib/api.ts`: `SubscriptionCapacity` interface, `fetchSubscriptions()`, `ingestSubscription()`, `fetchRecommendation()`
+- `apps/dashboard/src/app/subscriptions/page.tsx`: per-provider `ProviderCard` with `CapacityBar` components (hourly/daily/weekly), recommendation banner, ingest form (provider + plan + 3 window pairs), TanStack Query with 60 s refetch
+- `Sidebar.tsx`: added "Subscriptions" nav link (Activity icon)
+
+**Tests**
+- `tests/test_subscriptions.py`: 8 tests — ingest creates record, lowercase normalisation, zero-limit → null pct, latest-per-provider query, recommend picks lowest hourly pct, recommend on empty state, handover markdown generation, handover without optional fields
+
+**Logo**
+- `docs/assets/ObservaAI.png` added; README updated to use PNG instead of SVG
+
+---
+
 ### Week 9 — Marketplace release packaging
 **Commits:** `d17f465`, `52a456e`
 - **VS Code**: full marketplace `package.json` (keywords, galleryBanner, icon, repository), `.vscodeignore`, `README.md`, `CHANGELOG.md`, `media/icon.png` (128×128), `media/observaai-activity-bar.svg`, `@vscode/vsce` added
@@ -290,6 +331,63 @@ ObservaAI/
 - Team workspaces + API key scoping
 - VS Code + JetBrains IDE-native integration (not browser-only)
 - Works with any SDK (Python, TS, curl) — not just the claude.ai web UI
+
+---
+
+## Week 11b plan — Browser companion extension (MV3)
+
+**Goal:** Automatically ingest subscription usage data directly from the provider web UIs — no manual input required.
+
+### Approach: MV3 Chrome extension with DOM scraping
+
+Each provider exposes usage numbers in their web UI:
+- **claude.ai** — usage meter in the sidebar (claude-counter reverse-engineered this: intercepts SSE `message_limit` events)
+- **chat.openai.com** — usage bars in the account menu
+- **gemini.google.com** — usage info in account/subscription settings
+
+The companion extension will:
+1. Run a content script on each provider domain
+2. Scrape/intercept the usage numbers (MutationObserver on the relevant DOM elements)
+3. POST to `http://localhost:8000/subscriptions/ingest` whenever a change is detected
+
+### Files to create
+
+```
+apps/browser-extension/
+├── manifest.json          MV3 manifest (host_permissions for all 3 domains)
+├── background.js          Service worker — receives messages from content scripts, POSTs to gateway
+├── content/
+│   ├── claude.js          Intercepts claude.ai SSE message_limit events + DOM scraping
+│   ├── openai.js          DOM scraping for ChatGPT usage meter
+│   └── gemini.js          DOM scraping for Gemini usage meter
+├── popup/
+│   ├── popup.html         Simple status popup: connection indicator + last-ingested per provider
+│   └── popup.js
+└── options/
+    ├── options.html       Gateway URL setting (default: http://localhost:8000)
+    └── options.js
+```
+
+### Key technical notes
+
+- **claude.ai**: SSE stream contains `message_limit` events with `{remaining, total}` fields — intercept via `fetch` override in content script (same approach as claude-counter)
+- **chat.openai.com**: usage visible in DOM at `data-testid="usage-bar"` or similar — use MutationObserver; may need to trigger account menu open
+- **gemini.google.com**: less well-documented; start with MutationObserver on the usage section, fall back to periodic scrape
+- **Security**: extension only talks to `http://localhost:8000` — never to external servers. Add to `host_permissions` in manifest.
+- **Rate of ingestion**: debounce 5 s after a DOM change — don't spam the gateway on every keystroke
+
+### Integration with 11a
+
+Once 11b is running, the manual "Update Subscription Usage" VS Code command and the dashboard ingest form become backup methods. The browser extension handles it automatically in the background.
+
+### What to do next session
+
+1. Create `apps/browser-extension/manifest.json` (MV3, permissions: `storage`, `scripting`, host_permissions for 3 domains + localhost:8000)
+2. `background.js` — message handler that calls `fetch('http://localhost:8000/subscriptions/ingest', ...)`
+3. `content/claude.js` — intercept `fetch` to capture SSE `message_limit` payload
+4. `popup/popup.html + popup.js` — show last ingest time + connection status per provider
+5. Load unpacked in Chrome DevTools and test against real claude.ai session
+6. Add `apps/browser-extension/` to README install instructions
 
 ---
 
@@ -362,5 +460,7 @@ ObservaAI/
 | 8 | JetBrains plugin | ✅ |
 | 9 | Marketplace release packaging (CI/CD, icons, store metadata) | ✅ |
 | 10 | Context window %, cache expiry, rate-limit windows, /estimate | ✅ |
-| 11 | Cost forecasting + anomaly detection | ⬜ |
-| 12 | Self-hosted Helm chart / Railway deploy button | ⬜ |
+| 11a | Subscription capacity tracking + provider handover | ✅ |
+| 11b | Browser companion extension (MV3) — auto-ingest from claude.ai / ChatGPT / Gemini | ⬜ |
+| 12 | Cost forecasting + anomaly detection | ⬜ |
+| 13 | Self-hosted Helm chart / Railway deploy button | ⬜ |

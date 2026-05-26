@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/logo.svg" alt="ObservaAI" width="240" />
+<img src="docs/assets/ObservaAI.png" alt="ObservaAI" width="240" />
 
 # ObservaAI
 
@@ -63,6 +63,8 @@ ObservaAI sits between your code and the providers, transparently records every 
 - **Context window %** — every request shows how full the model's context window is (green <50%, yellow <80%, red >80%). Supports all 5 providers with per-model limits.
 - **Cache expiry indicator** — Anthropic prompt-cache hits show a live ⚡ active badge (5-min TTL). VS Code status bar appends `· ⚡cache` when the last request is within the cache window.
 - **Rolling rate-limit windows** — `GET /analytics/rate-limits` returns per-provider token usage over the last 5 hours and 7 days. Dashboard Overview shows usage bars with countdown to reset.
+- **Subscription capacity tracking** — for Claude Pro / ChatGPT Plus / Gemini Pro users who don't use the API. `POST /subscriptions/ingest` records hourly·daily·weekly usage snapshots; `GET /subscriptions` returns the latest per provider; `GET /subscriptions/recommend` picks the provider with most remaining capacity. Dashboard `/subscriptions` page shows color-coded progress bars (green <50%, yellow 50–80%, red >80%). VS Code sidebar shows the same bars, refreshed every 60 s.
+- **Provider handover** — `POST /handover/generate` packages your current conversation goal + context into a formatted markdown document. VS Code command `ObservaAI: Prepare Handover` auto-suggests the recommended next provider, then copies the doc to the clipboard so you can paste it straight into ChatGPT or Gemini and continue the session without losing context.
 - **Pre-flight cost estimate** — `POST /estimate` accepts `{provider, model, messages}` and returns `{estimated_input_tokens, estimated_cost_usd, context_pct}` without making an API call. Uses `tiktoken` for OpenAI models; character heuristic for others.
 - **Error rate analytics** — `GET /analytics/errors` reports non-2xx request counts and error rates per provider. Status codes recorded on every proxied request.
 - **Live dashboard** with token usage, cost-over-time charts, provider mix donut, request history, and session drill-down.
@@ -350,6 +352,8 @@ If you deploy the gateway behind a public hostname:
 | ✅ | JetBrains plugin (IntelliJ, PyCharm, GoLand, WebStorm) |
 | ✅ | VS Code + JetBrains Marketplace releases (CI/CD workflows, packaging, icons, store metadata) |
 | ✅ | Context window % per request, cache expiry indicator, rolling rate-limit windows, `/estimate` endpoint, error rate analytics |
+| ✅ | Subscription capacity tracking — ingest Claude Pro / ChatGPT Plus / Gemini Pro hourly·daily·weekly usage; progress bars in VS Code sidebar + dashboard `/subscriptions`; `POST /handover/generate` packages context for one-command provider switching |
+| ⬜ | Browser companion extension (MV3) — auto-ingest usage bars from claude.ai / chat.openai.com / gemini.google.com |
 | ⬜ | Cost forecasting + anomaly detection |
 | ⬜ | Self-hosted Helm chart / Railway one-click deploy |
 
