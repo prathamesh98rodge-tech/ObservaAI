@@ -1,0 +1,13 @@
+node_modules/
+.turbo/
+dist/
+out/
+.next/
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.env
+.env.local
+*.vsix
+.DS_Store
