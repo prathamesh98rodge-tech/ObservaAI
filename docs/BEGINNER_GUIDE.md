@@ -166,10 +166,12 @@ Open your browser and go to **http://localhost:3000**
 
 You'll see a live dashboard that updates every time you make an API call:
 
-- **Overview** — total tokens used this session, total cost, average latency
+- **Overview** — total tokens used this session, total cost, average latency, and a **Rolling Token Windows** widget showing how many tokens you've used in the last 5 hours and 7 days per provider
 - **Providers** — breakdown by OpenAI/Claude/Gemini/etc
 - **Costs** — cost over time chart, which provider costs most
-- **Sessions** — history of your request sessions
+- **Sessions** — history of your request sessions. Click any session to expand it and see individual requests with:
+  - **Ctx %** — how full the model's context window is (green = fine, yellow = getting full, red = nearly full)
+  - **Cache** — ⚡ active badge when an Anthropic prompt-cache hit is still within its 5-minute window
 - **Budgets** — set spending limits with email/webhook alerts
 
 Try making a few API calls through ObservaAI and watch the numbers update live.
@@ -261,6 +263,37 @@ To get notified before you accidentally overspend:
 4. Click Save
 
 When you hit 80% of your limit, you'll get a VS Code/JetBrains notification and an optional webhook call to Slack/Discord/etc.
+
+---
+
+## Check cost before sending (pre-flight estimate)
+
+Not sure if your prompt is too expensive before you send it? Use the `/estimate` endpoint:
+
+```bash
+curl http://localhost:8000/estimate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "openai",
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "Summarise this entire book: ..."}]
+  }'
+```
+
+Response:
+```json
+{
+  "estimated_input_tokens": 4823,
+  "estimated_cost_usd": 0.012058,
+  "context_pct": 3.8
+}
+```
+
+- **estimated_input_tokens** — approximate token count of your messages
+- **estimated_cost_usd** — what the input alone will cost (output tokens not included)
+- **context_pct** — what percentage of the model's context window you're using
+
+This works without making a real API call — no tokens are consumed.
 
 ---
 

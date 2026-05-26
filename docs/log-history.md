@@ -31,9 +31,9 @@ URLs: Gateway → http://localhost:8000 | Dashboard → http://localhost:3000
 | Database | SQLite (dev) / Postgres (prod via Docker Compose) | 5432 |
 | CI/CD | GitHub Actions: ci.yml, release-vscode.yml, release-jetbrains.yml | — |
 
-**Active branch:** `claude/happy-goldberg-4tXbl` (merges into `main` after each week)  
-**Last completed week:** Week 9 — Marketplace release packaging  
-**Next up:** Week 10 — Context window %, cache expiry, rolling rate-limit windows, `/estimate` endpoint
+**Active branch:** `main`  
+**Last completed week:** Week 10 — Context window %, cache expiry, rate-limit windows, `/estimate`, error analytics  
+**Next up:** Week 11 — Cost forecasting + anomaly detection
 
 ---
 
@@ -223,6 +223,16 @@ ObservaAI/
 - `ObservaAISettings`: PersistentStateComponent → `observaai.xml`
 - `Disposer.register(this, conn)` pattern for bus connection lifecycle
 - Build note: `./gradlew buildPlugin` needs ~600 MB IntelliJ SDK download (blocked in CI sandbox)
+
+### Week 10 — Prompt analytics + claude-counter features
+**Commits:** `add31ae`, `a73f747`, `ee26f11`
+- **Context window %**: `CONTEXT_LIMITS` map in `pricing.py` (all 5 providers); `context_window_pct()` computes `input_tokens / limit * 100`; `context_pct REAL` column + Alembic migration 006; stored on every request; exposed in `/analytics/requests`; dashboard Sessions page shows color-coded badge (green <50%, yellow <80%, red ≥80%)
+- **Cache expiry**: `cache_expires_at DATETIME` column + migration 007; set to `created_at + 5 min` for Anthropic requests with cached tokens; `cache_active: bool` computed at query time in `/analytics/requests`; Sessions page shows ⚡ active / expired badge; VS Code status bar appends `· ⚡cache` when last request is within window
+- **Rolling rate-limit windows**: `GET /analytics/rate-limits` — per-provider token totals for last 5h and 7d; dashboard Overview shows "Rolling Token Windows" widget with provider rows and reset countdown
+- **`/estimate` endpoint**: `POST /estimate` — `{provider, model, messages}` → `{estimated_input_tokens, estimated_cost_usd, context_pct}`; uses `tiktoken` for OpenAI models (with `encoding_for_model` + o200k_base fallback); character heuristic for all others; `tiktoken==0.9.0` added to requirements
+- **Error rate analytics**: `status_code INTEGER` column + migration 008; proxy router passes upstream status on every non-streaming request; `GET /analytics/errors` aggregates error/total counts per provider in Python; `fetchErrors()` added to dashboard api.ts
+- **CI fixes**: Removed explicit `version:` from `pnpm/action-setup@v4` in `ci.yml` and `release-vscode.yml` — action reads `packageManager` from `package.json` automatically; specifying both causes `ERR_PNPM_BAD_PM_VERSION`
+- **Tests**: 10 new tests for Week 10 features (context_window_pct, estimate_tokens, /estimate, /rate-limits, /errors)
 
 ### Week 9 — Marketplace release packaging
 **Commits:** `d17f465`, `52a456e`

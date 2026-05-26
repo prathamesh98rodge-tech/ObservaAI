@@ -13,7 +13,7 @@ _Datadog + Grafana + Raycast for LLM workflows._
 [![Node](https://img.shields.io/badge/node-22+-339933.svg)](#)
 [![Next.js](https://img.shields.io/badge/next.js-15-black.svg)](#)
 [![FastAPI](https://img.shields.io/badge/fastapi-0.115-009688.svg)](#)
-[![Tests](https://img.shields.io/badge/tests-25%20passing-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-35%20passing-brightgreen.svg)](#testing)
 
 Route requests for **OpenAI · Anthropic · Gemini · Ollama · OpenRouter** through one
 gateway. See tokens, cost, latency and per-provider breakdowns live — from a web
@@ -60,11 +60,16 @@ ObservaAI sits between your code and the providers, transparently records every 
   same request/response shape, including SSE & NDJSON streaming.
 - **Token & cost tracking** per request, session, and provider, with built-in price tables.
 - **Prompt-cache hit-rate metrics** — tracks cached tokens, measures actual savings (OpenAI 50%, Anthropic 90% discount).
+- **Context window %** — every request shows how full the model's context window is (green <50%, yellow <80%, red >80%). Supports all 5 providers with per-model limits.
+- **Cache expiry indicator** — Anthropic prompt-cache hits show a live ⚡ active badge (5-min TTL). VS Code status bar appends `· ⚡cache` when the last request is within the cache window.
+- **Rolling rate-limit windows** — `GET /analytics/rate-limits` returns per-provider token usage over the last 5 hours and 7 days. Dashboard Overview shows usage bars with countdown to reset.
+- **Pre-flight cost estimate** — `POST /estimate` accepts `{provider, model, messages}` and returns `{estimated_input_tokens, estimated_cost_usd, context_pct}` without making an API call. Uses `tiktoken` for OpenAI models; character heuristic for others.
+- **Error rate analytics** — `GET /analytics/errors` reports non-2xx request counts and error rates per provider. Status codes recorded on every proxied request.
 - **Live dashboard** with token usage, cost-over-time charts, provider mix donut, request history, and session drill-down.
 - **WebSocket push** — dashboard updates the instant a request completes; HTTP polling fallback when WS is down.
 - **Cost-budget alerts** — set per-workspace / per-provider limits; get notified at warning threshold and when exceeded. Supports webhook callbacks (Slack, Discord, etc.).
 - **Multi-workspace teams** — create named teams, issue `obs-…` API keys, scope all telemetry per team. Switch workspaces in the dashboard sidebar.
-- **VS Code extension** — status-bar token counter, sidebar live metrics, Ollama VRAM monitor, budget alert notifications, one-click proxy URL copy.
+- **VS Code extension** — status-bar token counter (+ ⚡cache indicator), sidebar live metrics, Ollama VRAM monitor, budget alert notifications, one-click proxy URL copy.
 - **JetBrains plugin** — same metrics in IntelliJ IDEA, PyCharm, GoLand, WebStorm; tool window + status bar + balloon notifications.
 - **Local-first** — SQLite by default, no external services, no telemetry. Your prompts stay on your machine.
 - **Postgres-ready** — swap to Postgres for production; Alembic migrations included.
@@ -86,7 +91,10 @@ ObservaAI sits between your code and the providers, transparently records every 
 ┌──────────────────────────────────────────────────────────────────────┐
 │  ObservaAI Gateway  (FastAPI · port 8000)                             │
 │  ├─ /proxy/{provider}/{path}    transparent forward + record          │
+│  ├─ /proxy/{provider}/{path}    transparent forward + record          │
 │  ├─ /analytics/{live,timeline,costs,tokens,sessions,requests,cache}   │
+│  ├─ /analytics/{rate-limits,errors}  rolling windows + error rates   │
+│  ├─ /estimate                   pre-flight token + cost estimate      │
 │  ├─ /ws/metrics                 live WebSocket push                   │
 │  ├─ /budgets                    CRUD + /alerts endpoint               │
 │  ├─ /teams                      team + API key management             │
@@ -289,7 +297,7 @@ make migrate            # apply pending Alembic migrations (Postgres)
 
 ```bash
 make test
-# 25 passed in 0.86s
+# 35 passed in ~1s
 ```
 
 Covers:
@@ -300,6 +308,10 @@ Covers:
 - Budget CRUD, alert level computation, not-found cases
 - Team auth: valid key resolves team_id; invalid key returns 401
 - Unknown-provider 404 path
+- `context_window_pct()` for known and unknown models
+- `estimate_tokens()` heuristic fallback
+- `POST /estimate` response shape and context_pct calculation
+- `GET /analytics/rate-limits` and `GET /analytics/errors` empty-state responses
 
 ---
 
@@ -337,7 +349,7 @@ If you deploy the gateway behind a public hostname:
 | ✅ | Multi-workspace teams with `obs-…` API key authentication |
 | ✅ | JetBrains plugin (IntelliJ, PyCharm, GoLand, WebStorm) |
 | ✅ | VS Code + JetBrains Marketplace releases (CI/CD workflows, packaging, icons, store metadata) |
-| ⬜ | Prompt analytics (top prompts, error rates, model A/B comparison) |
+| ✅ | Context window % per request, cache expiry indicator, rolling rate-limit windows, `/estimate` endpoint, error rate analytics |
 | ⬜ | Cost forecasting + anomaly detection |
 | ⬜ | Self-hosted Helm chart / Railway one-click deploy |
 
