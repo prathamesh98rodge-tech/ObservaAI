@@ -27,11 +27,28 @@ def _time_bucket(granularity: str, column):
     return func.strftime(_SQLITE_FMT[granularity], column).label("period")
 
 
+# ── team_id filter helper ─────────────────────────────────────────────────────
+
+def _team_session_filter(team_id: str | None):
+    """Return a WHERE clause element that scopes requests to a team's sessions, or None."""
+    if team_id is None:
+        return None
+    return Request.session_id.in_(
+        select(Session.id).where(Session.team_id == team_id)
+    )
+
+
 # ── endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("/sessions")
-async def list_sessions(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Session).order_by(Session.start_time.desc()).limit(50))
+async def list_sessions(
+    team_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(Session).order_by(Session.start_time.desc()).limit(50)
+    if team_id is not None:
+        stmt = stmt.where(Session.team_id == team_id)
+    result = await db.execute(stmt)
     sessions = result.scalars().all()
     return [
         {
@@ -49,12 +66,16 @@ async def list_sessions(db: AsyncSession = Depends(get_db)):
 @router.get("/requests")
 async def list_requests(
     session_id: str | None = Query(None),
+    team_id: str | None = Query(None),
     limit: int = Query(100, le=500),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(Request).order_by(Request.created_at.desc()).limit(limit)
     if session_id:
         stmt = stmt.where(Request.session_id == session_id)
+    tf = _team_session_filter(team_id)
+    if tf is not None:
+        stmt = stmt.where(tf)
     result = await db.execute(stmt)
     requests = result.scalars().all()
     return [
@@ -79,6 +100,7 @@ async def list_requests(
 @router.get("/tokens")
 async def token_usage(
     provider: str | None = Query(None),
+    team_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(
@@ -93,6 +115,9 @@ async def token_usage(
     ).group_by(Request.provider, Request.model)
     if provider:
         stmt = stmt.where(Request.provider == provider)
+    tf = _team_session_filter(team_id)
+    if tf is not None:
+        stmt = stmt.where(tf)
     result = await db.execute(stmt)
     rows = result.all()
     return [
@@ -111,12 +136,18 @@ async def token_usage(
 
 
 @router.get("/costs")
-async def cost_breakdown(db: AsyncSession = Depends(get_db)):
+async def cost_breakdown(
+    team_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
     stmt = select(
         Request.provider,
         func.sum(Request.estimated_cost).label("total_cost"),
         func.sum(Request.input_tokens + Request.output_tokens).label("total_tokens"),
     ).group_by(Request.provider)
+    tf = _team_session_filter(team_id)
+    if tf is not None:
+        stmt = stmt.where(tf)
     result = await db.execute(stmt)
     rows = result.all()
     return [
@@ -130,7 +161,10 @@ async def cost_breakdown(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/cache")
-async def cache_metrics(db: AsyncSession = Depends(get_db)):
+async def cache_metrics(
+    team_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
     """Prompt-cache hit-rate and savings, globally and per provider."""
     stmt = select(
         Request.provider,
@@ -139,6 +173,9 @@ async def cache_metrics(db: AsyncSession = Depends(get_db)):
         func.sum(Request.cache_savings_usd).label("savings_usd"),
         func.count(Request.id).label("request_count"),
     ).group_by(Request.provider)
+    tf = _team_session_filter(team_id)
+    if tf is not None:
+        stmt = stmt.where(tf)
     result = await db.execute(stmt)
     rows = result.all()
 
@@ -182,9 +219,11 @@ async def cache_metrics(db: AsyncSession = Depends(get_db)):
 async def timeline(
     granularity: Literal["minute", "hour", "day"] = Query("hour"),
     limit: int = Query(24, ge=1, le=168),
+    team_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
     bucket = _time_bucket(granularity, Request.created_at)
+    tf = _team_session_filter(team_id)
 
     stmt = (
         select(
@@ -198,6 +237,8 @@ async def timeline(
         .order_by(bucket.asc())
         .limit(limit)
     )
+    if tf is not None:
+        stmt = stmt.where(tf)
 
     result = await db.execute(stmt)
     rows = result.all()
@@ -233,20 +274,25 @@ async def timeline(
 
 
 @router.get("/live")
-async def live_metrics(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(
-            Request.provider,
-            Request.model,
-            func.sum(Request.input_tokens).label("total_input"),
-            func.sum(Request.output_tokens).label("total_output"),
-            func.sum(Request.cached_tokens).label("total_cached"),
-            func.sum(Request.cache_savings_usd).label("total_savings"),
-            func.sum(Request.estimated_cost).label("total_cost"),
-            func.count(Request.id).label("request_count"),
-            func.avg(Request.latency_ms).label("avg_latency"),
-        ).group_by(Request.provider, Request.model)
-    )
+async def live_metrics(
+    team_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    tf = _team_session_filter(team_id)
+    stmt = select(
+        Request.provider,
+        Request.model,
+        func.sum(Request.input_tokens).label("total_input"),
+        func.sum(Request.output_tokens).label("total_output"),
+        func.sum(Request.cached_tokens).label("total_cached"),
+        func.sum(Request.cache_savings_usd).label("total_savings"),
+        func.sum(Request.estimated_cost).label("total_cost"),
+        func.count(Request.id).label("request_count"),
+        func.avg(Request.latency_ms).label("avg_latency"),
+    ).group_by(Request.provider, Request.model)
+    if tf is not None:
+        stmt = stmt.where(tf)
+    result = await db.execute(stmt)
     rows = result.all()
     usage = [
         {

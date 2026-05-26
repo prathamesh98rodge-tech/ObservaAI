@@ -52,7 +52,7 @@ export default function SessionsPage() {
 
   const { data: sessionsData, isLoading: sessionsLoading } = useQuery<ApiSession[]>({
     queryKey: ["sessions"],
-    queryFn: fetchSessions,
+    queryFn: () => fetchSessions(),
     refetchInterval: 15_000,
   });
 

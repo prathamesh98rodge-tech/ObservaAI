@@ -91,6 +91,11 @@
           "type": "boolean",
           "default": true,
           "description": "Show Ollama GPU/VRAM metrics in the sidebar"
+        },
+        "observaai.teamApiKey": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "ObservaAI team API key (`obs-...`). Scopes all telemetry to your team workspace."
         }
       }
     }

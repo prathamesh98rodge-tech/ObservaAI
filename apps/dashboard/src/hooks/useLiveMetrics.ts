@@ -6,7 +6,7 @@ import { fetchLiveMetrics } from "@/lib/api";
 export function useLiveMetrics() {
   return useQuery({
     queryKey: ["live-metrics"],
-    queryFn: fetchLiveMetrics,
+    queryFn: () => fetchLiveMetrics(),
     refetchInterval: 5_000,
   });
 }

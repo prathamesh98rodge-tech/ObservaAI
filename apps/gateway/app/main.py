@@ -10,8 +10,9 @@ from app.routers.websocket import router as ws_router
 from app.routers.proxy import router as proxy_router
 from app.routers.ollama_health import router as ollama_health_router
 from app.routers.budgets import router as budgets_router
+from app.routers.teams import router as teams_router
 from app.adapters.registry import known_providers
-from app.services.session_service import reset_session
+from app.services.session_service import reset_all_sessions
 
 
 @asynccontextmanager
@@ -41,6 +42,7 @@ app.include_router(ws_router)
 app.include_router(proxy_router)
 app.include_router(ollama_health_router)
 app.include_router(budgets_router)
+app.include_router(teams_router)
 
 
 @app.get("/providers")
@@ -50,5 +52,5 @@ async def list_providers():
 
 @app.post("/session/reset")
 async def session_reset():
-    reset_session()
+    reset_all_sessions()
     return {"status": "ok", "message": "Session reset. Next request creates a new session."}

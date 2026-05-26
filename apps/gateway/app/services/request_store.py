@@ -24,11 +24,12 @@ async def record_request(
     streaming: bool,
     workspace: str = "default",
     temperature: float | None = None,
+    team_id: str | None = None,
 ) -> Request:
     model = usage.model or "unknown"
     cost = estimate_cost(provider, model, usage.input_tokens, usage.output_tokens)
     savings = estimate_cache_savings(provider, model, usage.cached_tokens)
-    session_id = await get_or_create_session(db, workspace)
+    session_id = await get_or_create_session(db, workspace, team_id=team_id)
 
     req = Request(
         id=str(uuid.uuid4()),
