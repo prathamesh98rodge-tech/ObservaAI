@@ -1,16 +1,30 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { fetchCosts, fetchTimeline, fetchTokenUsage } from "@/lib/api";
+import { fetchCosts, fetchTimeline, fetchTokenUsage, fetchCacheMetrics } from "@/lib/api";
 import { formatCost, formatTokens, PROVIDER_COLORS } from "@/lib/utils";
 import { ProviderDonutChart } from "@/components/charts/ProviderDonutChart";
 import { CostAreaChart } from "@/components/charts/CostAreaChart";
-import { DollarSign, TrendingUp, Zap } from "lucide-react";
+import { DollarSign, TrendingUp, Zap, Sparkles } from "lucide-react";
 import type { TokenUsageSummary } from "@observaai/shared-types";
 
-// Shapes from GET /analytics/costs and GET /analytics/timeline
+// Shapes matching API responses (snake_case from REST)
 interface ProviderCostRow { provider: string; total_cost: number; total_tokens: number; }
 interface TimelineRow { period: string; cost: number; requests: number; }
+interface CacheProviderRow {
+  provider: string;
+  inputTokens: number;
+  cachedTokens: number;
+  savingsUsd: number;
+  hitRate: number;
+  requestCount: number;
+}
+interface CacheMetrics {
+  totalCachedTokens: number;
+  totalSavingsUsd: number;
+  hitRate: number;
+  byProvider: CacheProviderRow[];
+}
 
 export default function CostsPage() {
   const { data: costsData = [], isLoading: costsLoading } = useQuery<ProviderCostRow[]>({
@@ -28,12 +42,18 @@ export default function CostsPage() {
     queryFn: () => fetchTimeline("hour"),
     refetchInterval: 30_000,
   });
+  const { data: cache, isLoading: cacheLoading } = useQuery<CacheMetrics>({
+    queryKey: ["cache"],
+    queryFn: fetchCacheMetrics,
+    refetchInterval: 15_000,
+  });
 
   const totalCost = costsData.reduce((s, r) => s + r.total_cost, 0);
   const totalRequests = tokenData.reduce((s, r) => s + r.requestCount, 0);
   const avgCostPerRequest = totalRequests > 0 ? totalCost / totalRequests : 0;
   const topProvider = [...costsData].sort((a, b) => b.total_cost - a.total_cost)[0];
   const isLoading = costsLoading || timelineLoading;
+  const hasCacheData = (cache?.totalCachedTokens ?? 0) > 0;
 
   return (
     <div className="space-y-6">
@@ -68,7 +88,81 @@ export default function CostsPage() {
         </div>
       </div>
 
-      {/* Breakdown table */}
+      {/* Prompt cache efficiency */}
+      {!cacheLoading && hasCacheData && cache && (
+        <div className="card p-0 overflow-hidden">
+          <div className="px-5 py-4 border-b border-[#1e1e2e] flex items-center gap-2">
+            <Sparkles size={15} className="text-yellow-400" />
+            <h3 className="text-sm font-semibold text-slate-300">Prompt Cache Efficiency</h3>
+            <span className="ml-auto text-xs text-slate-500">
+              Saved <span className="text-emerald-400 font-mono font-semibold">{formatCost(cache.totalSavingsUsd)}</span> vs full input pricing
+            </span>
+          </div>
+
+          {/* Global bar */}
+          <div className="px-5 py-4 border-b border-[#1e1e2e]">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-slate-400">Global hit rate</span>
+              <span className="text-sm font-mono font-semibold text-yellow-400">
+                {(cache.hitRate * 100).toFixed(1)}%
+              </span>
+            </div>
+            <div className="h-2 rounded-full bg-white/5 overflow-hidden">
+              <div
+                className="h-2 rounded-full bg-yellow-400 transition-all duration-700"
+                style={{ width: `${cache.hitRate * 100}%` }}
+              />
+            </div>
+            <p className="text-[11px] text-slate-600 mt-1.5">
+              {formatTokens(cache.totalCachedTokens)} tokens served from cache
+            </p>
+          </div>
+
+          {/* Per-provider breakdown */}
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[#1e1e2e]">
+                {["Provider", "Cached Tokens", "Hit Rate", "Savings"].map((col) => (
+                  <th key={col} className="px-5 py-3 text-left text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{col}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#1e1e2e]">
+              {cache.byProvider
+                .filter((r) => r.cachedTokens > 0)
+                .sort((a, b) => b.savingsUsd - a.savingsUsd)
+                .map((row) => {
+                  const color = PROVIDER_COLORS[row.provider] ?? "#64748b";
+                  return (
+                    <tr key={row.provider} className="hover:bg-white/2">
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+                          <span className="capitalize text-slate-200">{row.provider}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 font-mono text-blue-400">{formatTokens(row.cachedTokens)}</td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-16 h-1.5 rounded-full bg-white/5">
+                            <div
+                              className="h-1.5 rounded-full bg-yellow-400"
+                              style={{ width: `${row.hitRate * 100}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-mono text-yellow-400">{(row.hitRate * 100).toFixed(1)}%</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 font-mono text-emerald-400">{formatCost(row.savingsUsd)}</td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Provider breakdown table */}
       {costsData.length > 0 && (
         <div className="card p-0 overflow-hidden">
           <div className="px-5 py-4 border-b border-[#1e1e2e]">

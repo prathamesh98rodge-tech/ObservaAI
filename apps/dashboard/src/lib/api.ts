@@ -42,4 +42,10 @@ export async function fetchTimeline(granularity: "minute" | "hour" | "day" = "ho
   return res.json();
 }
 
+export async function fetchCacheMetrics() {
+  const res = await fetch(`${GATEWAY_URL}/analytics/cache`);
+  if (!res.ok) throw new Error("Failed to fetch cache metrics");
+  return res.json();
+}
+
 export const GATEWAY_WS_URL = GATEWAY_URL.replace(/^http/, "ws") + "/ws/metrics";

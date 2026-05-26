@@ -9,7 +9,7 @@ from sqlalchemy import select, update
 
 from app.models.request import Request, Session
 from app.adapters.base import UsageStats
-from app.services.pricing import estimate_cost
+from app.services.pricing import estimate_cost, estimate_cache_savings
 from app.services.metrics_bus import metrics_bus
 from app.services.session_service import get_or_create_session
 
@@ -26,6 +26,7 @@ async def record_request(
 ) -> Request:
     model = usage.model or "unknown"
     cost = estimate_cost(provider, model, usage.input_tokens, usage.output_tokens)
+    savings = estimate_cache_savings(provider, model, usage.cached_tokens)
     session_id = await get_or_create_session(db, workspace)
 
     req = Request(
@@ -36,6 +37,7 @@ async def record_request(
         output_tokens=usage.output_tokens,
         cached_tokens=usage.cached_tokens,
         reasoning_tokens=usage.reasoning_tokens,
+        cache_savings_usd=savings,
         latency_ms=latency_ms,
         estimated_cost=cost,
         streaming=streaming,
@@ -67,7 +69,9 @@ async def _broadcast_live(db: AsyncSession) -> None:
             Request.model,
             func.sum(Request.input_tokens).label("ti"),
             func.sum(Request.output_tokens).label("to_"),
-            func.sum(Request.estimated_cost).label("tc"),
+            func.sum(Request.cached_tokens).label("tc"),
+            func.sum(Request.cache_savings_usd).label("cs"),
+            func.sum(Request.estimated_cost).label("cost"),
             func.count(Request.id).label("rc"),
             func.avg(Request.latency_ms).label("al"),
         ).group_by(Request.provider, Request.model)
@@ -79,7 +83,9 @@ async def _broadcast_live(db: AsyncSession) -> None:
             "model": r.model,
             "totalInputTokens": r.ti or 0,
             "totalOutputTokens": r.to_ or 0,
-            "totalCost": round(r.tc or 0.0, 6),
+            "totalCachedTokens": r.tc or 0,
+            "cacheSavingsUsd": round(r.cs or 0.0, 6),
+            "totalCost": round(r.cost or 0.0, 6),
             "requestCount": r.rc,
             "avgLatencyMs": round(r.al or 0.0, 1),
         }

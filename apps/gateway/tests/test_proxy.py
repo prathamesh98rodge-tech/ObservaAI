@@ -231,3 +231,66 @@ def test_analytics_timeline_granularity_and_limit():
             res = client.get(f"/analytics/timeline?granularity={granularity}&limit=10")
             assert res.status_code == 200
             assert isinstance(res.json(), list)
+
+
+def test_analytics_cache_empty():
+    with TestClient(app) as client:
+        res = client.get("/analytics/cache")
+    assert res.status_code == 200
+    data = res.json()
+    assert "totalCachedTokens" in data
+    assert "totalSavingsUsd" in data
+    assert "hitRate" in data
+    assert "byProvider" in data
+    assert data["totalCachedTokens"] == 0
+    assert data["hitRate"] == 0.0
+
+
+def test_cache_savings_estimation():
+    from app.services.pricing import estimate_cache_savings
+
+    # Anthropic: 90% discount — 1M cached tokens at $3/M input = $2.70 savings
+    savings = estimate_cache_savings("anthropic", "claude-sonnet-4-6", 1_000_000)
+    assert savings == pytest.approx(2.70)
+
+    # OpenAI: 50% discount — 1M cached tokens at $2.5/M input = $1.25 savings
+    savings = estimate_cache_savings("openai", "gpt-4o", 1_000_000)
+    assert savings == pytest.approx(1.25)
+
+    # Ollama: always free, no savings concept
+    savings = estimate_cache_savings("ollama", "llama3", 1_000_000)
+    assert savings == 0.0
+
+    # Zero cached tokens → zero savings
+    savings = estimate_cache_savings("anthropic", "claude-sonnet-4-6", 0)
+    assert savings == 0.0
+
+
+def test_openai_cached_token_extraction():
+    from app.adapters.openai import extract_usage
+    response_with_cache = {
+        "model": "gpt-4o",
+        "usage": {
+            "prompt_tokens": 1000,
+            "completion_tokens": 200,
+            "prompt_tokens_details": {"cached_tokens": 800},
+        },
+    }
+    stats = extract_usage(response_with_cache)
+    assert stats.input_tokens == 1000
+    assert stats.cached_tokens == 800
+
+
+def test_anthropic_cached_token_extraction():
+    from app.adapters.anthropic import extract_usage
+    response_with_cache = {
+        "model": "claude-sonnet-4-6",
+        "usage": {
+            "input_tokens": 500,
+            "output_tokens": 100,
+            "cache_read_input_tokens": 400,
+        },
+    }
+    stats = extract_usage(response_with_cache)
+    assert stats.input_tokens == 500
+    assert stats.cached_tokens == 400

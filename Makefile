@@ -1,4 +1,4 @@
-.PHONY: help install dev up down logs test typecheck build clean reset
+.PHONY: help install dev up down logs test typecheck build clean reset migrate migrate-new
 
 help:
 	@echo "ObservaAI — make targets"
@@ -11,6 +11,8 @@ help:
 	@echo "  make test        Run gateway pytest suite"
 	@echo "  make typecheck   Type-check all TS apps + Python"
 	@echo "  make build       Build dashboard + extension bundles"
+	@echo "  make migrate     Apply pending Alembic migrations (Postgres)"
+	@echo "  make migrate-new Run autogenerate to create a new migration"
 	@echo "  make clean       Remove build artifacts, caches, venv"
 	@echo "  make reset       Drop the local SQLite database"
 
@@ -54,6 +56,13 @@ clean:
 	rm -rf node_modules apps/*/node_modules apps/*/.next apps/*/dist apps/*/.turbo
 	rm -rf apps/gateway/.venv apps/gateway/**/__pycache__
 	find . -name "*.pyc" -delete
+
+migrate:
+	cd apps/gateway && .venv/bin/alembic upgrade head
+
+migrate-new:
+	@read -p "Migration message: " msg; \
+	cd apps/gateway && .venv/bin/alembic revision --autogenerate -m "$$msg"
 
 reset:
 	rm -f apps/gateway/observaai.db

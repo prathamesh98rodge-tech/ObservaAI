@@ -30,6 +30,7 @@ class Request(Base):
     output_tokens: Mapped[int] = mapped_column(Integer, default=0)
     cached_tokens: Mapped[int] = mapped_column(Integer, default=0)
     reasoning_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cache_savings_usd: Mapped[float] = mapped_column(Float, default=0.0)
     latency_ms: Mapped[int] = mapped_column(Integer, default=0)
     estimated_cost: Mapped[float] = mapped_column(Float, default=0.0)
     streaming: Mapped[bool] = mapped_column(Boolean, default=False)
