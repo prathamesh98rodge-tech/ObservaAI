@@ -1,0 +1,70 @@
+name: Release — JetBrains Plugin
+
+on:
+  push:
+    tags:
+      - "jetbrains-v*"
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Publish channel (stable / eap)"
+        type: choice
+        options: [stable, eap]
+        default: stable
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    name: Build & publish plugin ZIP
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Grant execute permission for Gradle wrapper
+        run: chmod +x apps/jetbrains-plugin/gradlew
+
+      - name: Build plugin
+        working-directory: apps/jetbrains-plugin
+        run: ./gradlew buildPlugin --no-daemon
+
+      - name: Verify plugin
+        working-directory: apps/jetbrains-plugin
+        run: ./gradlew verifyPlugin --no-daemon
+
+      - name: Upload plugin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: observaai-jetbrains-${{ github.ref_name }}.zip
+          path: apps/jetbrains-plugin/build/distributions/*.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apps/jetbrains-plugin/build/distributions/*.zip
+          tag_name: ${{ github.ref_name }}
+          name: ObservaAI JetBrains ${{ github.ref_name }}
+          generate_release_notes: true
+
+      - name: Sign plugin
+        working-directory: apps/jetbrains-plugin
+        env:
+          JB_CERTIFICATE_CHAIN: ${{ secrets.JB_CERTIFICATE_CHAIN }}
+          JB_PRIVATE_KEY: ${{ secrets.JB_PRIVATE_KEY }}
+          JB_PRIVATE_KEY_PASSWORD: ${{ secrets.JB_PRIVATE_KEY_PASSWORD }}
+        run: ./gradlew signPlugin --no-daemon
+
+      - name: Publish to JetBrains Marketplace
+        working-directory: apps/jetbrains-plugin
+        env:
+          JB_PUBLISH_TOKEN: ${{ secrets.JB_PUBLISH_TOKEN }}
+          JB_PUBLISH_CHANNEL: ${{ inputs.channel || 'stable' }}
+        run: ./gradlew publishPlugin --no-daemon

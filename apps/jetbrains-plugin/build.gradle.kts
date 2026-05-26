@@ -13,7 +13,7 @@ repositories {
 }
 
 intellij {
-    version.set("2024.1")     // IC-2024.1 ~600 MB download
+    version.set("2024.1")     // IC-2024.1 — minimum supported platform version
     type.set("IC")
     downloadSources.set(false)
     updateSinceUntilBuild.set(false)
@@ -26,8 +26,8 @@ dependencies {
 
 tasks {
     patchPluginXml {
-        sinceBuild.set("241")
-        untilBuild.set(provider { null })
+        sinceBuild.set("241")                          // IntelliJ 2024.1+
+        untilBuild.set(provider { null })              // no upper bound
     }
 
     // Skip heavy searchable-options indexing during dev builds
@@ -36,5 +36,18 @@ tasks {
     withType<JavaCompile> {
         sourceCompatibility = "21"
         targetCompatibility = "21"
+    }
+
+    // Sign the plugin before publishing (env vars set by CI)
+    signPlugin {
+        certificateChain.set(System.getenv("JB_CERTIFICATE_CHAIN") ?: "")
+        privateKey.set(System.getenv("JB_PRIVATE_KEY") ?: "")
+        password.set(System.getenv("JB_PRIVATE_KEY_PASSWORD") ?: "")
+    }
+
+    // Publish to JetBrains Marketplace (env var set by CI)
+    publishPlugin {
+        token.set(System.getenv("JB_PUBLISH_TOKEN") ?: "")
+        channels.set(listOf(System.getenv("JB_PUBLISH_CHANNEL") ?: "stable"))
     }
 }

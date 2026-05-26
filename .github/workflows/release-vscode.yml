@@ -1,0 +1,75 @@
+name: Release — VS Code Extension
+
+on:
+  push:
+    tags:
+      - "vscode-v*"
+  workflow_dispatch:
+    inputs:
+      pre_release:
+        description: "Publish as pre-release"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    name: Build & publish VSIX
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build extension
+        working-directory: apps/vscode-extension
+        run: pnpm build
+
+      - name: Type-check
+        working-directory: apps/vscode-extension
+        run: pnpm typecheck
+
+      - name: Package VSIX
+        working-directory: apps/vscode-extension
+        run: pnpm package
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: observaai-vscode-${{ github.ref_name }}.vsix
+          path: apps/vscode-extension/*.vsix
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apps/vscode-extension/*.vsix
+          tag_name: ${{ github.ref_name }}
+          name: ObservaAI VS Code ${{ github.ref_name }}
+          generate_release_notes: true
+
+      - name: Publish to VS Code Marketplace
+        if: ${{ !inputs.pre_release }}
+        working-directory: apps/vscode-extension
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx @vscode/vsce publish --pat "$VSCE_PAT"
+
+      - name: Publish as pre-release to VS Code Marketplace
+        if: ${{ inputs.pre_release }}
+        working-directory: apps/vscode-extension
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx @vscode/vsce publish --pre-release --pat "$VSCE_PAT"

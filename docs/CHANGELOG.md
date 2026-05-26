@@ -15,7 +15,7 @@
 | Database | SQLite (dev) / Postgres (prod via Docker) | 5432 |
 
 **Branch:** `claude/happy-goldberg-4tXbl`  
-**Last commit:** Week 8 — JetBrains plugin
+**Last commit:** Week 9 — Marketplace release packaging
 
 ---
 
@@ -251,6 +251,52 @@
 
 ---
 
+## Week 9 — Marketplace release packaging
+**Commit:** (this session)
+
+**Built:**
+- **VS Code Marketplace**:
+  - `package.json` extended: `keywords`, `galleryBanner`, `repository`, `bugs`, `homepage`, `license`, `icon`
+  - `media/icon.png` (128×128) — lighthouse + analytics bars generated via `scripts/generate_icon.py`
+  - `media/icon.svg` — source SVG for the marketplace icon
+  - `media/observaai-activity-bar.svg` — 24×24 activity bar icon (replaces `$(pulse)` codicon)
+  - `.vscodeignore` — excludes `src/`, `node_modules/`, maps from the VSIX package
+  - `README.md` — marketplace listing page (features, setup, commands, settings table, provider table)
+  - `CHANGELOG.md` — extension release history
+  - Updated `scripts` in `package.json`: `package:pre`, `vsce:login`, `publish`
+  - Added `@vscode/vsce` to devDependencies
+- **JetBrains Marketplace**:
+  - `plugin.xml` — added `<id>`, `<vendor>`, `<description>` (HTML), `<change-notes>` (HTML), `<idea-version since-build="241"/>`
+  - `build.gradle.kts` — added `signPlugin` (reads `JB_CERTIFICATE_CHAIN`, `JB_PRIVATE_KEY`, `JB_PRIVATE_KEY_PASSWORD` env vars) and `publishPlugin` (reads `JB_PUBLISH_TOKEN`, `JB_PUBLISH_CHANNEL`)
+  - `CHANGELOG.md` — plugin release history
+- **GitHub Actions CI/CD**:
+  - `.github/workflows/ci.yml` — runs on every push: gateway pytest, dashboard typecheck + build, extension typecheck + build
+  - `.github/workflows/release-vscode.yml` — triggered on `vscode-v*` tags; builds VSIX, creates GitHub Release, publishes to VS Code Marketplace (supports `--pre-release` flag)
+  - `.github/workflows/release-jetbrains.yml` — triggered on `jetbrains-v*` tags; builds + verifies + signs + publishes plugin ZIP to JetBrains Marketplace
+  - `.github/PUBLISHING.md` — documents required secrets and manual release flow
+
+**Key files:**
+- `apps/vscode-extension/package.json` — full marketplace metadata
+- `apps/vscode-extension/.vscodeignore`
+- `apps/vscode-extension/README.md`
+- `apps/vscode-extension/media/icon.png` + `icon.svg`
+- `apps/jetbrains-plugin/src/main/resources/META-INF/plugin.xml` — full marketplace fields
+- `apps/jetbrains-plugin/build.gradle.kts` — `signPlugin` + `publishPlugin` tasks
+- `.github/workflows/ci.yml`
+- `.github/workflows/release-vscode.yml`
+- `.github/workflows/release-jetbrains.yml`
+
+**Release flow:**
+```bash
+# VS Code
+git tag vscode-v0.1.0 && git push origin vscode-v0.1.0
+
+# JetBrains
+git tag jetbrains-v0.1.0 && git push origin jetbrains-v0.1.0
+```
+
+---
+
 ## Architecture decisions log
 
 | Decision | Choice | Reason |
@@ -267,9 +313,9 @@
 
 ## What's next (roadmap)
 
-| Week | Feature |
-|---|---|
-| 9 | VS Code + JetBrains Marketplace releases |
-| 10 | Prompt analytics (top prompts, error rates, model comparison) |
-| 11 | Cost forecasting + anomaly detection |
-| 12 | Self-hosted Helm chart / Railway deploy button |
+| Week | Feature | Status |
+|---|---|---|
+| 9 | VS Code + JetBrains Marketplace releases | ✅ Done |
+| 10 | Prompt analytics (top prompts, error rates, model comparison) | ⬜ |
+| 11 | Cost forecasting + anomaly detection | ⬜ |
+| 12 | Self-hosted Helm chart / Railway deploy button | ⬜ |

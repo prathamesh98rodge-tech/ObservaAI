@@ -1,5 +1,53 @@
 <idea-plugin>
-    <!-- id/name/version/vendor are patched by build.gradle.kts pluginConfiguration block -->
+    <id>ai.observaai</id>
+    <name>ObservaAI</name>
+    <version>0.1.0</version>
+
+    <vendor email="support@observaai.dev" url="https://github.com/prathamesh98rodge-tech/ObservaAI">
+        ObservaAI
+    </vendor>
+
+    <description><![CDATA[
+        <p><b>Real-time AI cost and token monitoring inside your JetBrains IDE.</b></p>
+
+        <p>ObservaAI sits between your code and AI providers (OpenAI, Anthropic, Claude, Gemini,
+        Ollama, OpenRouter) and tracks every token, dollar, and millisecond of latency — live.</p>
+
+        <h3>Features</h3>
+        <ul>
+            <li><b>Live Metrics tool window</b> — tokens, cost, latency, per-provider breakdown, budget alerts</li>
+            <li><b>Status bar widget</b> — <code>⬡ 12.3K · $0.04</code> always-visible counter; click to open tool window</li>
+            <li><b>Budget alerts</b> — IDE balloon notifications when you approach or exceed a spending limit</li>
+            <li><b>Multi-workspace support</b> — team API key scopes all telemetry to a named workspace</li>
+            <li><b>Dark and light theme</b> — automatically matches your IDE theme</li>
+        </ul>
+
+        <h3>Quick setup</h3>
+        <ol>
+            <li>Run the ObservaAI gateway: <code>cd ObservaAI &amp;&amp; make dev</code></li>
+            <li>Point your AI SDK at the gateway: <code>base_url="http://localhost:8000/proxy/openai/v1"</code></li>
+            <li>Configure gateway URL in <b>Settings → Tools → ObservaAI</b> (default: <code>http://localhost:8000</code>)</li>
+        </ol>
+
+        <p>See the <a href="https://github.com/prathamesh98rodge-tech/ObservaAI/blob/main/docs/BEGINNER_GUIDE.md">Beginner Guide</a>
+        for full instructions.</p>
+
+        <h3>Supported providers</h3>
+        <p>OpenAI · Anthropic · Google Gemini · Ollama · OpenRouter</p>
+    ]]></description>
+
+    <change-notes><![CDATA[
+        <b>0.1.0</b>
+        <ul>
+            <li>Live Metrics tool window with per-provider breakdown and budget alert cards</li>
+            <li>Status bar widget showing live token count and cost</li>
+            <li>Budget alert balloon notifications with deduplication</li>
+            <li>Multi-workspace team API key support</li>
+            <li>Settings page under Tools → ObservaAI</li>
+        </ul>
+    ]]></change-notes>
+
+    <idea-version since-build="241"/>
 
     <depends>com.intellij.modules.platform</depends>
 

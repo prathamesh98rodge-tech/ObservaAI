@@ -7,6 +7,7 @@
 **Unified AI usage monitor & multi-provider gateway.**  
 _Datadog + Grafana + Raycast for LLM workflows._
 
+[![CI](https://github.com/prathamesh98rodge-tech/ObservaAI/actions/workflows/ci.yml/badge.svg)](https://github.com/prathamesh98rodge-tech/ObservaAI/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 [![Python](https://img.shields.io/badge/python-3.12-3776ab.svg)](#)
 [![Node](https://img.shields.io/badge/node-22+-339933.svg)](#)
@@ -335,7 +336,7 @@ If you deploy the gateway behind a public hostname:
 | ✅ | Cost-budget alerts (per-workspace, per-provider, webhook callbacks) |
 | ✅ | Multi-workspace teams with `obs-…` API key authentication |
 | ✅ | JetBrains plugin (IntelliJ, PyCharm, GoLand, WebStorm) |
-| ⬜ | VS Code + JetBrains Marketplace releases |
+| ✅ | VS Code + JetBrains Marketplace releases (CI/CD workflows, packaging, icons, store metadata) |
 | ⬜ | Prompt analytics (top prompts, error rates, model A/B comparison) |
 | ⬜ | Cost forecasting + anomaly detection |
 | ⬜ | Self-hosted Helm chart / Railway one-click deploy |

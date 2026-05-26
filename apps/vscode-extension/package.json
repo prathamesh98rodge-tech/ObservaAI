@@ -1,14 +1,31 @@
 {
   "name": "observaai-vscode",
   "displayName": "ObservaAI",
-  "description": "Unified AI usage monitor and multi-provider analytics for VS Code",
+  "description": "Real-time AI cost and token monitoring for OpenAI, Anthropic, Gemini, Ollama and OpenRouter — directly in VS Code.",
   "version": "0.1.0",
   "publisher": "observaai",
-  "private": true,
   "engines": {
     "vscode": "^1.95.0"
   },
-  "categories": ["Other", "Machine Learning"],
+  "categories": ["Other", "Machine Learning", "Visualization"],
+  "keywords": [
+    "openai", "anthropic", "claude", "gemini", "ollama", "llm", "ai", "tokens",
+    "cost", "monitoring", "analytics", "proxy", "observability"
+  ],
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prathamesh98rodge-tech/ObservaAI.git"
+  },
+  "bugs": {
+    "url": "https://github.com/prathamesh98rodge-tech/ObservaAI/issues"
+  },
+  "homepage": "https://github.com/prathamesh98rodge-tech/ObservaAI#readme",
+  "license": "MIT",
+  "galleryBanner": {
+    "color": "#0f172a",
+    "theme": "dark"
+  },
   "activationEvents": ["onStartupFinished"],
   "main": "./dist/extension.js",
   "contributes": {
@@ -17,7 +34,7 @@
         {
           "id": "observaai",
           "title": "ObservaAI",
-          "icon": "$(pulse)"
+          "icon": "media/observaai-activity-bar.svg"
         }
       ]
     },
@@ -104,7 +121,10 @@
     "build": "esbuild src/extension/index.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
     "dev": "npm run build -- --watch",
     "typecheck": "tsc --noEmit",
-    "package": "vsce package"
+    "package": "vsce package --no-dependencies",
+    "package:pre": "npm run build",
+    "vsce:login": "vsce login observaai",
+    "publish": "vsce publish"
   },
   "dependencies": {
     "@observaai/shared-types": "workspace:*",
@@ -114,6 +134,7 @@
     "@types/node": "^22.15.21",
     "@types/vscode": "^1.95.0",
     "@types/ws": "^8.5.14",
+    "@vscode/vsce": "^3.3.2",
     "esbuild": "^0.25.5",
     "typescript": "^5.8.3"
   }

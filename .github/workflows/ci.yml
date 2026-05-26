@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  gateway:
+    name: Gateway tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        working-directory: apps/gateway
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        working-directory: apps/gateway
+        run: pytest -x -q
+
+  dashboard:
+    name: Dashboard typecheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check dashboard
+        working-directory: apps/dashboard
+        run: pnpm typecheck
+
+      - name: Build dashboard
+        working-directory: apps/dashboard
+        run: pnpm build
+
+  vscode-extension:
+    name: VS Code extension typecheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check extension
+        working-directory: apps/vscode-extension
+        run: pnpm typecheck
+
+      - name: Build extension
+        working-directory: apps/vscode-extension
+        run: pnpm build
