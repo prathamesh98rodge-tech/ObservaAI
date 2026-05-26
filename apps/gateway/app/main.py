@@ -9,6 +9,7 @@ from app.routers.analytics import router as analytics_router
 from app.routers.websocket import router as ws_router
 from app.routers.proxy import router as proxy_router
 from app.routers.ollama_health import router as ollama_health_router
+from app.routers.budgets import router as budgets_router
 from app.adapters.registry import known_providers
 from app.services.session_service import reset_session
 
@@ -39,6 +40,7 @@ app.include_router(analytics_router)
 app.include_router(ws_router)
 app.include_router(proxy_router)
 app.include_router(ollama_health_router)
+app.include_router(budgets_router)
 
 
 @app.get("/providers")

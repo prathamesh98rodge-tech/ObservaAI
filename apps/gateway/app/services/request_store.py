@@ -12,6 +12,7 @@ from app.adapters.base import UsageStats
 from app.services.pricing import estimate_cost, estimate_cache_savings
 from app.services.metrics_bus import metrics_bus
 from app.services.session_service import get_or_create_session
+from app.services.budget_checker import check_budgets
 
 
 async def record_request(
@@ -58,6 +59,13 @@ async def record_request(
     await db.commit()
 
     await _broadcast_live(db)
+
+    # Budget check runs last — failure must never break the proxy response
+    try:
+        await check_budgets(db, workspace, provider)
+    except Exception:
+        pass
+
     return req
 
 
