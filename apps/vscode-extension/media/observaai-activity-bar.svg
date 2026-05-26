@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- lighthouse silhouette -->
+  <polygon points="12,3  16,3  14,11  10,11" fill="currentColor" opacity="0.9"/>
+  <!-- balcony -->
+  <rect x="9" y="11" width="6" height="1.5" rx="0.5" fill="currentColor"/>
+  <!-- body -->
+  <polygon points="8,18  16,18  14,13  10,13" fill="currentColor" opacity="0.7"/>
+  <!-- base -->
+  <rect x="6" y="18" width="12" height="2" rx="1" fill="currentColor"/>
+  <!-- left signal arc -->
+  <path d="M 7 14 A 3 3 0 0 1 7 10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity="0.9"/>
+  <!-- right signal arc -->
+  <path d="M 17 14 A 3 3 0 0 0 17 10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity="0.9"/>
+</svg>
