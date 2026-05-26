@@ -1,0 +1,37 @@
+<idea-plugin>
+    <!-- id/name/version/vendor are patched by build.gradle.kts pluginConfiguration block -->
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+
+        <!-- Application-level services -->
+        <applicationService serviceImplementation="ai.observaai.ObservaAISettings"/>
+        <applicationService serviceImplementation="ai.observaai.GatewayPoller"/>
+
+        <!-- Tool window — shows on the right side, available in all IDEs -->
+        <toolWindow id="ObservaAI"
+                    anchor="right"
+                    secondary="true"
+                    factoryClass="ai.observaai.toolwindow.MetricsToolWindowFactory"
+                    icon="/icons/observaai.svg"/>
+
+        <!-- Status bar widget -->
+        <statusBarWidgetFactory id="ai.observaai.tokenStatus"
+                                implementation="ai.observaai.statusbar.TokenStatusBarWidgetFactory"
+                                order="after Position"/>
+
+        <!-- Settings page under Settings → Tools → ObservaAI -->
+        <applicationConfigurable
+                parentId="tools"
+                instance="ai.observaai.SettingsConfigurable"
+                id="ai.observaai.settings"
+                displayName="ObservaAI"/>
+
+        <!-- Notification group for budget alerts -->
+        <notificationGroup id="ObservaAI Budget Alerts"
+                           displayType="BALLOON"
+                           isLogByDefault="true"/>
+
+    </extensions>
+</idea-plugin>
