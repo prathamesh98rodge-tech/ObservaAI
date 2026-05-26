@@ -2,13 +2,32 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, cast, String
 
-from app.database import get_db
+from app.database import get_db, is_postgres
 from app.models.request import Request, Session
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
+
+# ── dialect-aware time-bucketing ──────────────────────────────────────────────
+
+_SQLITE_FMT = {
+    "minute": "%Y-%m-%dT%H:%M:00",
+    "hour":   "%Y-%m-%dT%H:00:00",
+    "day":    "%Y-%m-%dT00:00:00",
+}
+_PG_TRUNC = {"minute": "minute", "hour": "hour", "day": "day"}
+
+
+def _time_bucket(granularity: str, column):
+    """Return a labeled string expression that truncates a timestamp to granularity."""
+    if is_postgres():
+        return cast(func.date_trunc(_PG_TRUNC[granularity], column), String).label("period")
+    return func.strftime(_SQLITE_FMT[granularity], column).label("period")
+
+
+# ── endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("/sessions")
 async def list_sessions(db: AsyncSession = Depends(get_db)):
@@ -46,6 +65,7 @@ async def list_requests(
             "input_tokens": r.input_tokens,
             "output_tokens": r.output_tokens,
             "cached_tokens": r.cached_tokens,
+            "cache_savings_usd": round(r.cache_savings_usd, 6),
             "latency_ms": r.latency_ms,
             "estimated_cost": r.estimated_cost,
             "streaming": r.streaming,
@@ -66,6 +86,7 @@ async def token_usage(
         Request.model,
         func.sum(Request.input_tokens).label("total_input"),
         func.sum(Request.output_tokens).label("total_output"),
+        func.sum(Request.cached_tokens).label("total_cached"),
         func.sum(Request.estimated_cost).label("total_cost"),
         func.count(Request.id).label("request_count"),
         func.avg(Request.latency_ms).label("avg_latency"),
@@ -80,6 +101,7 @@ async def token_usage(
             "model": r.model,
             "total_input_tokens": r.total_input or 0,
             "total_output_tokens": r.total_output or 0,
+            "total_cached_tokens": r.total_cached or 0,
             "total_cost": round(r.total_cost or 0.0, 6),
             "request_count": r.request_count,
             "avg_latency_ms": round(r.avg_latency or 0.0, 1),
@@ -107,19 +129,62 @@ async def cost_breakdown(db: AsyncSession = Depends(get_db)):
     ]
 
 
+@router.get("/cache")
+async def cache_metrics(db: AsyncSession = Depends(get_db)):
+    """Prompt-cache hit-rate and savings, globally and per provider."""
+    stmt = select(
+        Request.provider,
+        func.sum(Request.input_tokens).label("input_tokens"),
+        func.sum(Request.cached_tokens).label("cached_tokens"),
+        func.sum(Request.cache_savings_usd).label("savings_usd"),
+        func.count(Request.id).label("request_count"),
+    ).group_by(Request.provider)
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    by_provider = []
+    total_input = 0
+    total_cached = 0
+    total_savings = 0.0
+
+    for r in rows:
+        inp = r.input_tokens or 0
+        cached = r.cached_tokens or 0
+        savings = r.savings_usd or 0.0
+        billable = inp + cached
+        hit_rate = cached / billable if billable > 0 else 0.0
+
+        total_input += inp
+        total_cached += cached
+        total_savings += savings
+
+        by_provider.append({
+            "provider": r.provider,
+            "inputTokens": inp,
+            "cachedTokens": cached,
+            "savingsUsd": round(savings, 6),
+            "hitRate": round(hit_rate, 4),
+            "requestCount": r.request_count,
+        })
+
+    total_billable = total_input + total_cached
+    global_hit_rate = total_cached / total_billable if total_billable > 0 else 0.0
+
+    return {
+        "totalCachedTokens": total_cached,
+        "totalSavingsUsd": round(total_savings, 6),
+        "hitRate": round(global_hit_rate, 4),
+        "byProvider": by_provider,
+    }
+
+
 @router.get("/timeline")
 async def timeline(
     granularity: Literal["minute", "hour", "day"] = Query("hour"),
     limit: int = Query(24, ge=1, le=168),
     db: AsyncSession = Depends(get_db),
 ):
-    fmt = {
-        "minute": "%Y-%m-%dT%H:%M:00",
-        "hour":   "%Y-%m-%dT%H:00:00",
-        "day":    "%Y-%m-%dT00:00:00",
-    }[granularity]
-
-    bucket = func.strftime(fmt, Request.created_at).label("period")
+    bucket = _time_bucket(granularity, Request.created_at)
 
     stmt = (
         select(
@@ -137,13 +202,12 @@ async def timeline(
     result = await db.execute(stmt)
     rows = result.all()
 
-    # Collect distinct providers per bucket in a second query (cheap, one round-trip)
     if rows:
         periods = [r.period for r in rows]
-        bucket2 = func.strftime(fmt, Request.created_at).label("period")
+        bucket2 = _time_bucket(granularity, Request.created_at)
         prov_stmt = (
             select(bucket2, Request.provider)
-            .where(func.strftime(fmt, Request.created_at).in_(periods))
+            .where(_time_bucket(granularity, Request.created_at).in_(periods))
             .distinct()
         )
         prov_result = await db.execute(prov_stmt)
@@ -176,6 +240,8 @@ async def live_metrics(db: AsyncSession = Depends(get_db)):
             Request.model,
             func.sum(Request.input_tokens).label("total_input"),
             func.sum(Request.output_tokens).label("total_output"),
+            func.sum(Request.cached_tokens).label("total_cached"),
+            func.sum(Request.cache_savings_usd).label("total_savings"),
             func.sum(Request.estimated_cost).label("total_cost"),
             func.count(Request.id).label("request_count"),
             func.avg(Request.latency_ms).label("avg_latency"),
@@ -188,6 +254,8 @@ async def live_metrics(db: AsyncSession = Depends(get_db)):
             "model": r.model,
             "totalInputTokens": r.total_input or 0,
             "totalOutputTokens": r.total_output or 0,
+            "totalCachedTokens": r.total_cached or 0,
+            "cacheSavingsUsd": round(r.total_savings or 0.0, 6),
             "totalCost": round(r.total_cost or 0.0, 6),
             "requestCount": r.request_count,
             "avgLatencyMs": round(r.avg_latency or 0.0, 1),

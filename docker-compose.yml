@@ -1,4 +1,21 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: observaai
+      POSTGRES_PASSWORD: observaai
+      POSTGRES_DB: observaai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U observaai -d observaai"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   gateway:
     build:
       context: ./apps/gateway
@@ -6,16 +23,19 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=sqlite+aiosqlite:///./observaai.db
+      - DATABASE_URL=postgresql+asyncpg://observaai:observaai@postgres:5432/observaai
       - DEBUG=false
       - CORS_ORIGINS=["http://localhost:3000","http://localhost:3001"]
-    volumes:
-      - gateway_data:/app/data
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
     restart: unless-stopped
 
   dashboard:
@@ -32,4 +52,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  gateway_data:
+  postgres_data:

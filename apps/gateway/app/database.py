@@ -11,11 +11,23 @@ class Base(DeclarativeBase):
     pass
 
 
+def is_postgres() -> bool:
+    return settings.database_url.startswith("postgresql")
+
+
 async def get_db() -> AsyncSession:
     async with AsyncSessionLocal() as session:
         yield session
 
 
 async def init_db() -> None:
+    """Create all tables from metadata.
+
+    Used for SQLite (dev / test). In production with PostgreSQL, run
+    `alembic upgrade head` instead — init_db is a no-op there because
+    Alembic owns the schema.
+    """
+    if is_postgres():
+        return
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
