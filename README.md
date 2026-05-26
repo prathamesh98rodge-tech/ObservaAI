@@ -1,8 +1,10 @@
 <div align="center">
 
+<img src="docs/assets/logo.svg" alt="ObservaAI" width="240" />
+
 # ObservaAI
 
-**Unified AI usage monitor & multi-provider gateway.**
+**Unified AI usage monitor & multi-provider gateway.**  
 _Datadog + Grafana + Raycast for LLM workflows._
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
@@ -10,10 +12,13 @@ _Datadog + Grafana + Raycast for LLM workflows._
 [![Node](https://img.shields.io/badge/node-22+-339933.svg)](#)
 [![Next.js](https://img.shields.io/badge/next.js-15-black.svg)](#)
 [![FastAPI](https://img.shields.io/badge/fastapi-0.115-009688.svg)](#)
+[![Tests](https://img.shields.io/badge/tests-25%20passing-brightgreen.svg)](#testing)
 
 Route requests for **OpenAI · Anthropic · Gemini · Ollama · OpenRouter** through one
 gateway. See tokens, cost, latency and per-provider breakdowns live — from a web
-dashboard, a VS Code sidebar, and the status bar.
+dashboard, VS Code, JetBrains, and the status bar.
+
+[**Beginner? Start here →**](docs/BEGINNER_GUIDE.md)
 
 </div>
 
@@ -39,33 +44,29 @@ Edit `.env` to add your provider API keys, then point any LLM SDK at
 
 ## Why ObservaAI
 
-Every team using LLMs hits the same three problems:
+Every team using LLMs hits the same problems:
 
-1. **Cost surprises** — bills arrive at the end of the month with no per-feature
-   attribution.
-2. **Provider lock-in friction** — comparing GPT-4o vs. Claude vs. Gemini means
-   wiring three SDKs and three dashboards.
-3. **No live feedback loop** — you don't see token cost while you're prompting,
-   so you optimize blind.
+1. **Cost surprises** — bills arrive at end of month with no per-feature attribution.
+2. **Provider lock-in friction** — comparing GPT-4o vs. Claude vs. Gemini means wiring three SDKs and three dashboards.
+3. **No live feedback loop** — you don't see token cost while prompting.
+4. **No multi-workspace isolation** — one bill for everything, no per-team breakdown.
 
-ObservaAI sits between your code and the providers, transparently records every
-request, and surfaces the numbers immediately — in a dashboard, in your editor,
-and in your status bar.
+ObservaAI sits between your code and the providers, transparently records every request, and surfaces the numbers immediately — in a dashboard, in your editor, and in your status bar.
 
 ### Features
 
 - **Transparent proxy** for OpenAI, Anthropic, Gemini, Ollama, OpenRouter —
   same request/response shape, including SSE & NDJSON streaming.
-- **Token & cost tracking** per request, session, and provider, with built-in
-  price tables you can override.
-- **Live dashboard** with token usage, cost-over-time, provider mix, request
-  history, and per-session drill-down.
-- **WebSocket push** — the dashboard updates the instant a request completes;
-  HTTP polling falls back automatically when WS is down.
-- **VS Code extension** — status-bar token counter, sidebar with live metrics,
-  Ollama VRAM monitor, one-click proxy URL copy.
-- **Local-first** — SQLite by default, no external services, no telemetry. Your
-  prompts stay on your machine.
+- **Token & cost tracking** per request, session, and provider, with built-in price tables.
+- **Prompt-cache hit-rate metrics** — tracks cached tokens, measures actual savings (OpenAI 50%, Anthropic 90% discount).
+- **Live dashboard** with token usage, cost-over-time charts, provider mix donut, request history, and session drill-down.
+- **WebSocket push** — dashboard updates the instant a request completes; HTTP polling fallback when WS is down.
+- **Cost-budget alerts** — set per-workspace / per-provider limits; get notified at warning threshold and when exceeded. Supports webhook callbacks (Slack, Discord, etc.).
+- **Multi-workspace teams** — create named teams, issue `obs-…` API keys, scope all telemetry per team. Switch workspaces in the dashboard sidebar.
+- **VS Code extension** — status-bar token counter, sidebar live metrics, Ollama VRAM monitor, budget alert notifications, one-click proxy URL copy.
+- **JetBrains plugin** — same metrics in IntelliJ IDEA, PyCharm, GoLand, WebStorm; tool window + status bar + balloon notifications.
+- **Local-first** — SQLite by default, no external services, no telemetry. Your prompts stay on your machine.
+- **Postgres-ready** — swap to Postgres for production; Alembic migrations included.
 
 ---
 
@@ -74,44 +75,51 @@ and in your status bar.
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │  Your code                                                            │
-│    OpenAI SDK     Anthropic SDK     curl       VS Code Copilot        │
-└──────┬──────────────────┬──────────────┬──────────────┬───────────────┘
-       │                  │              │              │
-       └─── baseURL: ─────┴──────────────┴──────────────┘
-              http://localhost:8000/proxy/<provider>
-                              │
-                              ▼
+│   OpenAI SDK    Anthropic SDK    curl    VS Code    JetBrains IDE     │
+└──────┬─────────────────┬──────────────┬──────────────┬───────────────┘
+       │                 │              │              │
+       └── baseURL: ─────┴──────────────┴──────────────┘
+             http://localhost:8000/proxy/<provider>
+                             │
+                             ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │  ObservaAI Gateway  (FastAPI · port 8000)                             │
 │  ├─ /proxy/{provider}/{path}    transparent forward + record          │
-│  ├─ /analytics/{live,timeline,costs,tokens,sessions,requests}         │
-│  ├─ /ws/metrics                 live push                             │
+│  ├─ /analytics/{live,timeline,costs,tokens,sessions,requests,cache}   │
+│  ├─ /ws/metrics                 live WebSocket push                   │
+│  ├─ /budgets                    CRUD + /alerts endpoint               │
+│  ├─ /teams                      team + API key management             │
 │  ├─ /ollama/{status,ps,models}  local model passthrough               │
 │  └─ /session/reset              new session                           │
-└────────────┬────────────────────────────────────────────────┬─────────┘
-             │ SQLite (aiosqlite)                             │ WebSocket
-             ▼                                                ▼
-   ┌──────────────────────┐                       ┌───────────────────────┐
-   │  observaai.db        │                       │  Dashboard (Next 15)  │
-   │  sessions, requests  │                       │  + VS Code extension  │
-   └──────────────────────┘                       └───────────────────────┘
+└────────────┬─────────────────────────────────────────────┬───────────┘
+             │ SQLite / Postgres                           │ WebSocket
+             ▼                                             ▼
+   ┌──────────────────────┐                   ┌───────────────────────────┐
+   │  Database            │                   │  Dashboard  (Next.js 15)  │
+   │  sessions, requests  │                   │  VS Code extension        │
+   │  budgets, teams      │                   │  JetBrains plugin         │
+   └──────────────────────┘                   └───────────────────────────┘
 ```
 
-Monorepo layout:
+### Monorepo layout
 
 ```
 ObservaAI/
 ├── apps/
-│   ├── gateway/             FastAPI proxy + analytics API
+│   ├── gateway/             FastAPI proxy + analytics + budgets + teams API
 │   ├── dashboard/           Next.js 15 dashboard (App Router)
-│   └── vscode-extension/    VS Code sidebar + status bar
+│   ├── vscode-extension/    VS Code sidebar, status bar, budget alerts
+│   └── jetbrains-plugin/    IntelliJ Platform plugin (Kotlin/Gradle)
 ├── packages/
-│   ├── shared-types/        TS types shared by dashboard ↔ extension
+│   ├── shared-types/        TypeScript types shared by dashboard ↔ extensions
 │   ├── provider-adapters/   Per-provider request/response helpers
 │   ├── analytics-sdk/       Thin REST client for the gateway API
 │   └── ui-components/       Reusable React UI primitives
-├── infrastructure/          Docker, Alembic migrations
-├── docker-compose.yml
+├── docs/
+│   ├── BEGINNER_GUIDE.md    First-time setup guide (no experience needed)
+│   ├── CHANGELOG.md         Full session-by-session development log
+│   └── assets/logo.svg      Brand assets
+├── docker-compose.yml       Postgres + gateway + dashboard stack
 ├── install.sh               One-shot installer (curl-pipe friendly)
 └── Makefile                 Common dev tasks
 ```
@@ -137,10 +145,16 @@ resp = client.chat.completions.create(
 from anthropic import Anthropic
 client = Anthropic(base_url="http://localhost:8000/proxy/anthropic")
 msg = client.messages.create(
-    model="claude-sonnet-4-5",
+    model="claude-haiku-4-5",
     max_tokens=256,
     messages=[{"role": "user", "content": "hi"}],
 )
+```
+
+**OpenAI (TypeScript / JS)**
+```typescript
+import OpenAI from "openai";
+const client = new OpenAI({ baseURL: "http://localhost:8000/proxy/openai/v1" });
 ```
 
 **Ollama (curl)**
@@ -154,6 +168,18 @@ curl http://localhost:8000/proxy/ollama/api/chat -d '{
 Streaming, system prompts, tool use — everything works the same way it does
 against the provider directly. The gateway is transparent.
 
+### Multi-workspace team keys
+
+```python
+# Scope all requests to a specific team workspace
+client = OpenAI(
+    base_url="http://localhost:8000/proxy/openai/v1",
+    default_headers={"X-ObservaAI-Team-Key": "obs-your-key-here"},
+)
+```
+
+Create teams and issue keys at http://localhost:3000/teams.
+
 ### VS Code extension
 
 1. Build the `.vsix`:
@@ -164,11 +190,14 @@ against the provider directly. The gateway is transparent.
 3. The **ObservaAI** activity-bar icon opens a sidebar with live metrics and
    proxy-URL copy buttons. The status bar shows running token total + cost.
 
+Settings under `observaai.*`:
+- `gatewayUrl` — gateway URL (default: `http://localhost:8000`)
+- `teamApiKey` — `obs-…` key to scope metrics to your team workspace
+- `ollamaUrl` — local Ollama daemon URL
+- `enabled` / `showOllamaMetrics`
+
 Commands (all under `ObservaAI:` in the command palette):
-- Open Dashboard
-- Reset Session
-- Test Gateway Connection
-- Copy Proxy URL…
+- Open Dashboard · Reset Session · Test Gateway Connection · Copy Proxy URL…
 
 ### JetBrains plugin (IntelliJ IDEA, PyCharm, GoLand, …)
 
@@ -193,42 +222,33 @@ Configure under **Settings → Tools → ObservaAI**:
 | Team API Key | _(blank)_ | `obs-…` key scopes metrics to your workspace |
 | Enabled | `true` | Disable to pause telemetry collection |
 
-**Features:**
-- Live metrics panel (tokens, cost, avg latency, per-provider breakdown)
-- Status bar widget: `⬡ 12.3K · $0.04` — click to open the metrics panel
-- Budget alerts as IDE balloon notifications (warning / exceeded)
-- Dark/light theme aware
-
 ---
 
 ## Configuration
 
 Everything lives in `.env`:
 
-| Variable                  | Default                                     | Notes |
-| ------------------------- | ------------------------------------------- | ----- |
-| `DEBUG`                   | `false`                                     | Verbose FastAPI logs |
-| `DATABASE_URL`            | `sqlite+aiosqlite:///./observaai.db`        | Any SQLAlchemy async URL |
-| `OPENAI_API_KEY`          | `""`                                        | Injected into `Authorization: Bearer` |
-| `ANTHROPIC_API_KEY`       | `""`                                        | Injected into `x-api-key` |
-| `GEMINI_API_KEY`          | `""`                                        | Injected as `?key=` |
-| `OPENROUTER_API_KEY`      | `""`                                        | |
-| `OLLAMA_BASE_URL`         | `http://localhost:11434`                    | Local Ollama daemon |
-| `CORS_ORIGINS`            | `["http://localhost:3000", ...]`            | JSON array of allowed origins |
-| `NEXT_PUBLIC_GATEWAY_URL` | `http://localhost:8000`                     | Dashboard → gateway URL |
-
-The dashboard `/settings` page shows live connection status, the API key form
-(read-only — actual values are loaded from `.env`), and copy buttons for every
-proxy URL.
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `DEBUG` | `false` | Verbose FastAPI logs |
+| `DATABASE_URL` | `sqlite+aiosqlite:///./observaai.db` | Any SQLAlchemy async URL |
+| `OPENAI_API_KEY` | `""` | Injected into `Authorization: Bearer` |
+| `ANTHROPIC_API_KEY` | `""` | Injected into `x-api-key` |
+| `GEMINI_API_KEY` | `""` | Injected as `?key=` |
+| `OPENROUTER_API_KEY` | `""` | |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Local Ollama daemon |
+| `CORS_ORIGINS` | `["http://localhost:3000", ...]` | JSON array of allowed origins |
+| `NEXT_PUBLIC_GATEWAY_URL` | `http://localhost:8000` | Dashboard → gateway URL |
 
 ---
 
 ## Development
 
-### Prereqs
+### Prerequisites
 - Node 22+ and **pnpm** 9+
 - Python 3.12+
-- (optional) Docker + Compose for the containerized stack
+- (optional) Docker + Compose for the full containerized stack
+- (optional) JDK 21 + Gradle 8 for the JetBrains plugin
 
 ### From scratch
 
@@ -236,46 +256,48 @@ proxy URL.
 git clone https://github.com/prathamesh98rodge-tech/ObservaAI.git
 cd ObservaAI
 make install            # JS deps + Python venv + .env
-make dev                # gateway + dashboard, concurrently
+make dev                # gateway (port 8000) + dashboard (port 3000)
 ```
 
 ### Useful commands
 
 ```bash
-make test               # gateway pytest suite (16 tests)
+make test               # gateway pytest suite (25 tests)
 make typecheck          # tsc --noEmit across all TS apps
-make build              # production build of dashboard + extension
-make up                 # full Docker stack, detached
+make build              # production build of dashboard + VS Code extension
+make build-jetbrains    # build JetBrains plugin ZIP (needs JDK 21 + network)
+make up                 # full Docker stack (gateway + dashboard + Postgres)
 make logs               # tail container logs
 make reset              # drop local SQLite DB
 make clean              # remove node_modules, .venv, .next, dist
+make migrate            # apply pending Alembic migrations (Postgres)
 ```
 
 ### Project scripts
 
-| Workspace              | Command                                  | What it does                |
-| ---------------------- | ---------------------------------------- | --------------------------- |
-| `@observaai/dashboard` | `pnpm dev` / `pnpm build`                | Next.js 15 App Router       |
-| `observaai-vscode`     | `pnpm build` / `pnpm package`            | esbuild → `dist/extension.js` / `.vsix` |
-| `apps/gateway`         | `.venv/bin/uvicorn app.main:app --reload`| FastAPI on :8000            |
+| Workspace | Command | What it does |
+| --- | --- | --- |
+| `@observaai/dashboard` | `pnpm dev` / `pnpm build` | Next.js 15 App Router |
+| `observaai-vscode` | `pnpm build` / `pnpm package` | esbuild → `dist/extension.js` / `.vsix` |
+| `observaai-jetbrains` | `./gradlew buildPlugin` | Kotlin → plugin ZIP |
+| `apps/gateway` | `.venv/bin/uvicorn app.main:app --reload` | FastAPI on :8000 |
 
 ---
 
 ## Testing
 
-The gateway has a real pytest suite (`apps/gateway/tests/`) that uses **respx**
-to mock upstream provider HTTP calls:
-
 ```bash
 make test
-# .................... 16 passed in 1.17s
+# 25 passed in 0.86s
 ```
 
-It covers:
+Covers:
 - End-to-end proxying for all 5 providers (non-streaming + streaming)
 - Token extraction from each provider's response shape
-- Cost estimation against the built-in price table
-- All `/analytics/*` endpoints, including SQLite time-bucketing
+- Cost estimation + cache savings against the built-in price table
+- All `/analytics/*` endpoints including SQLite time-bucketing
+- Budget CRUD, alert level computation, not-found cases
+- Team auth: valid key resolves team_id; invalid key returns 401
 - Unknown-provider 404 path
 
 ---
@@ -285,31 +307,47 @@ It covers:
 ObservaAI is **local-first by design**:
 
 - **No outbound telemetry.** The gateway only talks to the providers you call.
-- **API keys never leave your machine.** They live in `.env` (gitignored), are
-  injected into upstream requests server-side, and are never sent to the
-  dashboard or extension. The settings UI is display-only.
-- **CORS is strict** — only the origins listed in `CORS_ORIGINS` can call the
-  gateway from a browser.
-- **Hop-by-hop response headers are stripped** before responding (`connection`,
-  `transfer-encoding`, etc.) to avoid leaking proxy plumbing.
+- **API keys never leave your machine.** They live in `.env` (gitignored), are injected into upstream requests server-side, and are never sent to the dashboard or extension.
+- **Team API keys** (`obs-…`) are stored in plaintext in the local database — treat them like passwords; revoke them in the Teams UI if compromised.
+- **CORS is strict** — only the origins listed in `CORS_ORIGINS` can call the gateway from a browser.
+- **Hop-by-hop headers stripped** before responding (`connection`, `transfer-encoding`, etc.).
 - **SQLite is local-file** by default; nothing is uploaded.
 
 If you deploy the gateway behind a public hostname:
-1. Put it behind TLS (reverse proxy with nginx/Caddy/Traefik).
+1. Put it behind TLS (nginx/Caddy/Traefik).
 2. Restrict `CORS_ORIGINS` to your real dashboard hostname only.
-3. Add an auth layer (`X-API-Key` middleware or a reverse-proxy `auth_request`).
+3. Add auth middleware or a reverse-proxy `auth_request`.
 4. Switch `DATABASE_URL` to Postgres for concurrent writers.
 
 ---
 
 ## Roadmap
 
-- [ ] Postgres support + Alembic migrations
-- [ ] Cost-budget alerts (per-workspace, per-provider)
-- [ ] Prompt cache hit-rate metrics
-- [ ] Marketplace release of the VS Code extension
-- [x] JetBrains plugin (IntelliJ, PyCharm, GoLand, …)
-- [ ] Per-team / multi-workspace mode
+| Status | Feature |
+|---|---|
+| ✅ | Turborepo monorepo scaffold |
+| ✅ | Transparent proxy — OpenAI, Anthropic, Gemini, Ollama, OpenRouter |
+| ✅ | Token & cost tracking with built-in price tables |
+| ✅ | Live dashboard (Next.js 15, WebSocket push, HTTP polling fallback) |
+| ✅ | VS Code extension — sidebar, status bar, Ollama VRAM, budget alerts |
+| ✅ | Postgres support + Alembic migrations |
+| ✅ | Prompt cache hit-rate metrics |
+| ✅ | Cost-budget alerts (per-workspace, per-provider, webhook callbacks) |
+| ✅ | Multi-workspace teams with `obs-…` API key authentication |
+| ✅ | JetBrains plugin (IntelliJ, PyCharm, GoLand, WebStorm) |
+| ⬜ | VS Code + JetBrains Marketplace releases |
+| ⬜ | Prompt analytics (top prompts, error rates, model A/B comparison) |
+| ⬜ | Cost forecasting + anomaly detection |
+| ⬜ | Self-hosted Helm chart / Railway one-click deploy |
+
+---
+
+## Docs
+
+| Document | Description |
+|---|---|
+| [Beginner Guide](docs/BEGINNER_GUIDE.md) | First-time setup, no prior experience needed |
+| [Development Log](docs/CHANGELOG.md) | Full week-by-week build history and architecture decisions |
 
 ---
 

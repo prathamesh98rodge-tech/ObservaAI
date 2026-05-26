@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 520" width="480" height="520">
+  <!-- ── background ── -->
+  <rect width="480" height="520" fill="white"/>
+
+  <!-- ── left signal waves ── -->
+  <path d="M 148 200 A 70 70 0 0 0 148 130" fill="none" stroke="#22c55e" stroke-width="6" stroke-linecap="round"/>
+  <path d="M 128 218 A 100 100 0 0 0 128 112" fill="none" stroke="#16a34a" stroke-width="6" stroke-linecap="round"/>
+  <path d="M 106 238 A 135 135 0 0 0 106 92" fill="none" stroke="#06b6d4" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- ── right signal arcs ── -->
+  <path d="M 332 200 A 70 70 0 0 1 332 130" fill="none" stroke="#06b6d4" stroke-width="6" stroke-linecap="round"/>
+  <path d="M 354 218 A 100 100 0 0 1 354 112" fill="none" stroke="#0891b2" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- ── right node connection (vertical line + 3 dots) ── -->
+  <line x1="388" y1="105" x2="388" y2="230" stroke="#06b6d4" stroke-width="3"/>
+  <circle cx="388" cy="108" r="7" fill="#06b6d4"/>
+  <circle cx="388" cy="168" r="7" fill="#06b6d4"/>
+  <circle cx="388" cy="228" r="7" fill="#06b6d4"/>
+
+  <!-- ── lighthouse base platform ── -->
+  <rect x="138" y="292" width="204" height="16" rx="4" fill="#1e2a4a"/>
+
+  <!-- ── lighthouse body (dark silhouette) ── -->
+  <!-- Main dark shape: narrows from base to top -->
+  <polygon points="
+    155,292  325,292
+    205,148  275,148
+  " fill="#1e2a4a"/>
+
+  <!-- ── colorful analytics bars inside lighthouse body ── -->
+  <!-- These sit on top of the dark body, clipped to lighthouse shape -->
+  <clipPath id="lh-clip">
+    <polygon points="155,292 325,292 275,148 205,148"/>
+  </clipPath>
+  <g clip-path="url(#lh-clip)">
+    <!-- teal bar left -->
+    <rect x="164" y="200" width="42" height="92" fill="#06b6d4" opacity="0.9"/>
+    <!-- green bar center-left -->
+    <rect x="214" y="232" width="42" height="60" fill="#65a30d" opacity="0.9"/>
+    <!-- teal-green overlap section -->
+    <rect x="196" y="216" width="52" height="76" fill="#14b8a6" opacity="0.7"/>
+    <!-- green bar center-right -->
+    <rect x="260" y="248" width="38" height="44" fill="#65a30d" opacity="0.85"/>
+  </g>
+
+  <!-- ── lighthouse balcony railing ── -->
+  <rect x="198" y="148" width="84" height="10" rx="2" fill="#1e2a4a"/>
+
+  <!-- ── lantern room ── -->
+  <rect x="213" y="100" width="54" height="48" rx="3" fill="#1e2a4a"/>
+  <!-- lantern windows -->
+  <rect x="221" y="108" width="16" height="20" rx="1" fill="white" opacity="0.9"/>
+  <rect x="243" y="108" width="16" height="20" rx="1" fill="white" opacity="0.9"/>
+
+  <!-- ── lantern roof (pentagon) ── -->
+  <polygon points="240,72  265,100  215,100" fill="#1e2a4a"/>
+
+  <!-- ── text: ObservaAI ── -->
+  <text x="240" y="356" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif"
+        font-size="52" font-weight="800" letter-spacing="-1">
+    <tspan fill="#1e2a4a">Observa</tspan><tspan fill="#0ea5e9">AI</tspan>
+  </text>
+
+  <!-- ── decorative color dashes under text ── -->
+  <rect x="140" y="372" width="30" height="5" rx="2.5" fill="#f97316"/>
+  <rect x="178" y="372" width="30" height="5" rx="2.5" fill="#ef4444"/>
+  <rect x="216" y="372" width="30" height="5" rx="2.5" fill="#8b5cf6"/>
+  <rect x="254" y="372" width="30" height="5" rx="2.5" fill="#3b82f6"/>
+  <rect x="292" y="372" width="30" height="5" rx="2.5" fill="#22c55e"/>
+</svg>
