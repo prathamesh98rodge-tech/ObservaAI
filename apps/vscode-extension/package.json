@@ -27,19 +27,48 @@
           "id": "observaai.metrics",
           "name": "Live Metrics",
           "type": "webview"
+        },
+        {
+          "id": "observaai.proxy",
+          "name": "Proxy URLs",
+          "type": "webview"
         }
       ]
     },
     "commands": [
       {
         "command": "observaai.openDashboard",
-        "title": "ObservaAI: Open Dashboard"
+        "title": "ObservaAI: Open Dashboard",
+        "icon": "$(link-external)"
       },
       {
         "command": "observaai.resetSession",
-        "title": "ObservaAI: Reset Session"
+        "title": "ObservaAI: Reset Session",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "observaai.testConnection",
+        "title": "ObservaAI: Test Gateway Connection"
+      },
+      {
+        "command": "observaai.copyProxyUrl",
+        "title": "ObservaAI: Copy Proxy URL…"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "observaai.openDashboard",
+          "when": "view == observaai.metrics",
+          "group": "navigation"
+        },
+        {
+          "command": "observaai.resetSession",
+          "when": "view == observaai.metrics",
+          "group": "navigation"
+        }
+      ]
+    },
     "configuration": {
       "title": "ObservaAI",
       "properties": {
@@ -48,10 +77,20 @@
           "default": "http://localhost:8000",
           "description": "URL of the ObservaAI gateway"
         },
+        "observaai.ollamaUrl": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "URL of the local Ollama instance"
+        },
         "observaai.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable ObservaAI telemetry collection"
+        },
+        "observaai.showOllamaMetrics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show Ollama GPU/VRAM metrics in the sidebar"
         }
       }
     }
@@ -63,11 +102,13 @@
     "package": "vsce package"
   },
   "dependencies": {
-    "@observaai/shared-types": "workspace:*"
+    "@observaai/shared-types": "workspace:*",
+    "ws": "^8.18.2"
   },
   "devDependencies": {
     "@types/node": "^22.15.21",
     "@types/vscode": "^1.95.0",
+    "@types/ws": "^8.5.14",
     "esbuild": "^0.25.5",
     "typescript": "^5.8.3"
   }

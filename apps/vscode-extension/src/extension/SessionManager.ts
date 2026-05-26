@@ -1,39 +1,68 @@
 import { EventEmitter } from "events";
 import * as vscode from "vscode";
+import WebSocket from "ws";
 import type { LiveMetrics } from "@observaai/shared-types";
 
+export interface OllamaRunningModel {
+  name: string;
+  model: string;
+  size: number;
+  size_vram: number;
+  expires_at: string;
+  details?: Record<string, unknown>;
+}
+
+export interface ExtendedMetrics extends LiveMetrics {
+  gatewayOnline: boolean;
+  wsConnected: boolean;
+  ollamaRunning: OllamaRunningModel[];
+}
+
+const POLL_INTERVAL_MS = 8_000;
+const OLLAMA_POLL_INTERVAL_MS = 15_000;
+const WS_RECONNECT_BASE_MS = 2_000;
+const WS_RECONNECT_MAX_MS = 30_000;
+
 export class SessionManager extends EventEmitter {
-  private metrics: LiveMetrics = {
-    sessionTokens: 0,
-    sessionCost: 0,
-    avgLatencyMs: 0,
-    requestsInFlight: 0,
-    usageByProvider: [],
-  };
+  private state: ExtendedMetrics = this.defaultState();
 
   private ws: WebSocket | null = null;
-  private pollInterval: ReturnType<typeof setInterval> | null = null;
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private ollamaTimer: ReturnType<typeof setInterval> | null = null;
+  private wsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private wsReconnectDelay = WS_RECONNECT_BASE_MS;
+  private wsIntentionalClose = false;
 
   start() {
-    this.connectWebSocket();
-    this.pollInterval = setInterval(() => this.fetchMetrics(), 10_000);
+    this.tryConnectWs();
     this.fetchMetrics();
+    this.pollTimer = setInterval(() => this.fetchMetrics(), POLL_INTERVAL_MS);
+
+    const cfg = vscode.workspace.getConfiguration("observaai");
+    if (cfg.get<boolean>("showOllamaMetrics", true)) {
+      this.fetchOllamaMetrics();
+      this.ollamaTimer = setInterval(() => this.fetchOllamaMetrics(), OLLAMA_POLL_INTERVAL_MS);
+    }
   }
 
   reset() {
-    this.metrics = {
-      sessionTokens: 0,
-      sessionCost: 0,
-      avgLatencyMs: 0,
-      requestsInFlight: 0,
-      usageByProvider: [],
-    };
-    this.emit("update", this.metrics);
+    this.state = this.defaultState();
+    this.emit("update", this.state);
   }
 
-  getMetrics(): LiveMetrics {
-    return this.metrics;
+  getMetrics(): ExtendedMetrics {
+    return this.state;
   }
+
+  dispose() {
+    this.wsIntentionalClose = true;
+    if (this.pollTimer) clearInterval(this.pollTimer);
+    if (this.ollamaTimer) clearInterval(this.ollamaTimer);
+    if (this.wsReconnectTimer) clearTimeout(this.wsReconnectTimer);
+    this.ws?.close();
+  }
+
+  // ── private ────────────────────────────────────────────────────────────────
 
   private gatewayUrl(): string {
     return vscode.workspace
@@ -45,32 +74,93 @@ export class SessionManager extends EventEmitter {
     try {
       const res = await fetch(`${this.gatewayUrl()}/analytics/live`);
       if (res.ok) {
-        this.metrics = await res.json();
-        this.emit("update", this.metrics);
+        const data = await res.json() as LiveMetrics;
+        this.state = { ...this.state, ...data, gatewayOnline: true };
+        this.emit("update", this.state);
+      } else {
+        this.setOffline();
       }
     } catch {
-      // Gateway offline — silently skip
+      this.setOffline();
     }
   }
 
-  private connectWebSocket() {
+  private async fetchOllamaMetrics() {
     try {
-      const wsUrl = this.gatewayUrl().replace(/^http/, "ws") + "/ws/metrics";
-      this.ws = new (require("ws"))(wsUrl) as WebSocket;
-      this.ws.onmessage = (event: MessageEvent) => {
-        try {
-          const data = JSON.parse(event.data as string);
-          if (data.type !== "ping") {
-            this.metrics = data;
-            this.emit("update", this.metrics);
-          }
-        } catch { /* ignore malformed messages */ }
-      };
-    } catch { /* ws module not available or gateway offline */ }
+      const res = await fetch(`${this.gatewayUrl()}/ollama/ps`);
+      if (res.ok) {
+        const data = await res.json() as { models: OllamaRunningModel[] };
+        this.state = { ...this.state, ollamaRunning: data.models ?? [] };
+        this.emit("update", this.state);
+      }
+    } catch {
+      // Ollama offline — leave existing metrics
+    }
   }
 
-  dispose() {
-    if (this.pollInterval) clearInterval(this.pollInterval);
-    this.ws?.close();
+  private setOffline() {
+    if (this.state.gatewayOnline) {
+      this.state = { ...this.state, gatewayOnline: false };
+      this.emit("update", this.state);
+    }
+  }
+
+  private tryConnectWs() {
+    if (this.wsIntentionalClose) return;
+    const wsUrl = this.gatewayUrl().replace(/^http/, "ws") + "/ws/metrics";
+    try {
+      const ws = new WebSocket(wsUrl);
+      this.ws = ws;
+
+      ws.on("open", () => {
+        this.wsReconnectDelay = WS_RECONNECT_BASE_MS;
+        this.state = { ...this.state, wsConnected: true };
+        this.emit("update", this.state);
+      });
+
+      ws.on("message", (raw: WebSocket.RawData) => {
+        try {
+          const data = JSON.parse(raw.toString()) as LiveMetrics & { type?: string };
+          if (data.type === "ping") return;
+          this.state = { ...this.state, ...data, gatewayOnline: true, wsConnected: true };
+          this.emit("update", this.state);
+        } catch { /* ignore malformed */ }
+      });
+
+      ws.on("close", () => {
+        this.state = { ...this.state, wsConnected: false };
+        this.emit("update", this.state);
+        this.scheduleWsReconnect();
+      });
+
+      ws.on("error", () => {
+        // close event follows
+      });
+    } catch {
+      this.scheduleWsReconnect();
+    }
+  }
+
+  private scheduleWsReconnect() {
+    if (this.wsIntentionalClose) return;
+    if (this.wsReconnectTimer) return;
+    this.wsReconnectTimer = setTimeout(() => {
+      this.wsReconnectTimer = null;
+      this.wsReconnectDelay = Math.min(this.wsReconnectDelay * 2, WS_RECONNECT_MAX_MS);
+      this.tryConnectWs();
+    }, this.wsReconnectDelay);
+  }
+
+  private defaultState(): ExtendedMetrics {
+    return {
+      sessionTokens: 0,
+      sessionCost: 0,
+      avgLatencyMs: 0,
+      requestsInFlight: 0,
+      usageByProvider: [],
+      gatewayOnline: false,
+      wsConnected: false,
+      ollamaRunning: [],
+    };
   }
 }

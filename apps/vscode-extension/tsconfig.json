@@ -5,6 +5,7 @@
     "moduleResolution": "node",
     "lib": ["ES2020"],
     "strict": true,
+    "esModuleInterop": true,
     "outDir": "./dist",
     "rootDir": "./src",
     "sourceMap": true
