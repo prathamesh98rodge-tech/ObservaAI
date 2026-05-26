@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, Integer, Float, Boolean, DateTime, ForeignKey, Index
+from sqlalchemy import String, Integer, Float, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -37,6 +37,10 @@ class Request(Base):
     streaming: Mapped[bool] = mapped_column(Boolean, default=False)
     temperature: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    context_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cache_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     session_id: Mapped[str] = mapped_column(String, ForeignKey("sessions.id"))
     session: Mapped["Session"] = relationship("Session", back_populates="requests")

@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
@@ -78,6 +79,7 @@ async def list_requests(
         stmt = stmt.where(tf)
     result = await db.execute(stmt)
     requests = result.scalars().all()
+    now = datetime.now(timezone.utc)
     return [
         {
             "id": r.id,
@@ -90,6 +92,10 @@ async def list_requests(
             "latency_ms": r.latency_ms,
             "estimated_cost": r.estimated_cost,
             "streaming": r.streaming,
+            "context_pct": r.context_pct,
+            "cache_expires_at": r.cache_expires_at.isoformat() if r.cache_expires_at else None,
+            "cache_active": (r.cache_expires_at is not None and r.cache_expires_at > now),
+            "status_code": r.status_code,
             "session_id": r.session_id,
             "created_at": r.created_at.isoformat(),
         }
@@ -317,3 +323,71 @@ async def live_metrics(
         "requestsInFlight": 0,
         "usageByProvider": usage,
     }
+
+
+@router.get("/rate-limits")
+async def rate_limit_windows(
+    team_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Rolling token usage for the last 5 hours and 7 days, per provider."""
+    now = datetime.now(timezone.utc)
+    cutoff_5h = now - timedelta(hours=5)
+    cutoff_7d = now - timedelta(days=7)
+    tf = _team_session_filter(team_id)
+
+    async def _query(cutoff: datetime):
+        stmt = select(
+            Request.provider,
+            func.sum(Request.input_tokens + Request.output_tokens).label("tokens"),
+        ).where(Request.created_at >= cutoff).group_by(Request.provider)
+        if tf is not None:
+            stmt = stmt.where(tf)
+        return (await db.execute(stmt)).all()
+
+    rows_5h, rows_7d = await _query(cutoff_5h), await _query(cutoff_7d)
+    map_5h = {r.provider: r.tokens or 0 for r in rows_5h}
+    map_7d = {r.provider: r.tokens or 0 for r in rows_7d}
+    providers = set(map_5h) | set(map_7d)
+
+    return [
+        {
+            "provider": p,
+            "tokens_5h": map_5h.get(p, 0),
+            "tokens_7d": map_7d.get(p, 0),
+            "reset_5h_at": (now + timedelta(hours=5)).isoformat(),
+            "reset_7d_at": (now + timedelta(days=7)).isoformat(),
+        }
+        for p in sorted(providers)
+    ]
+
+
+@router.get("/errors")
+async def error_rate(
+    team_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Error rate per provider: counts of non-2xx requests vs total."""
+    tf = _team_session_filter(team_id)
+    all_stmt = select(Request.provider, Request.status_code)
+    if tf is not None:
+        all_stmt = all_stmt.where(tf)
+    rows = (await db.execute(all_stmt)).all()
+
+    from collections import defaultdict
+    totals: dict[str, int] = defaultdict(int)
+    errors: dict[str, int] = defaultdict(int)
+    for provider, status_code in rows:
+        totals[provider] += 1
+        if status_code is not None and status_code >= 400:
+            errors[provider] += 1
+
+    return [
+        {
+            "provider": p,
+            "total_requests": totals[p],
+            "error_requests": errors[p],
+            "error_rate": round(errors[p] / totals[p], 4) if totals[p] > 0 else 0.0,
+        }
+        for p in sorted(totals)
+    ]

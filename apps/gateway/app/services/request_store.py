@@ -2,17 +2,20 @@
 Persists a completed request and broadcasts live metrics to WebSocket clients.
 """
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 
 from app.models.request import Request, Session
 from app.adapters.base import UsageStats
-from app.services.pricing import estimate_cost, estimate_cache_savings
+from app.services.pricing import estimate_cost, estimate_cache_savings, context_window_pct
 from app.services.metrics_bus import metrics_bus
 from app.services.session_service import get_or_create_session
 from app.services.budget_checker import check_budgets
+
+# Anthropic caches for 5 minutes after first use.
+_ANTHROPIC_CACHE_TTL = timedelta(minutes=5)
 
 
 async def record_request(
@@ -25,11 +28,20 @@ async def record_request(
     workspace: str = "default",
     temperature: float | None = None,
     team_id: str | None = None,
+    status_code: int | None = None,
 ) -> Request:
     model = usage.model or "unknown"
     cost = estimate_cost(provider, model, usage.input_tokens, usage.output_tokens)
     savings = estimate_cache_savings(provider, model, usage.cached_tokens)
+    ctx_pct = context_window_pct(model, usage.input_tokens)
     session_id = await get_or_create_session(db, workspace, team_id=team_id)
+
+    now = datetime.now(timezone.utc)
+    cache_expires_at = (
+        now + _ANTHROPIC_CACHE_TTL
+        if provider == "anthropic" and usage.cached_tokens > 0
+        else None
+    )
 
     req = Request(
         id=str(uuid.uuid4()),
@@ -44,7 +56,10 @@ async def record_request(
         estimated_cost=cost,
         streaming=streaming,
         temperature=temperature,
-        created_at=datetime.now(timezone.utc),
+        context_pct=ctx_pct,
+        cache_expires_at=cache_expires_at,
+        status_code=status_code,
+        created_at=now,
         session_id=session_id,
     )
     db.add(req)

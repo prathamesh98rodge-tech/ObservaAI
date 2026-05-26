@@ -360,3 +360,57 @@ def test_budget_level_computation():
     assert _level(0.99, 0.8) == "warning"
     assert _level(1.0, 0.8) == "exceeded"
     assert _level(1.5, 0.8) == "exceeded"
+
+
+# ── Week 10 feature tests ─────────────────────────────────────────────────────
+
+def test_context_window_pct():
+    from app.services.pricing import context_window_pct
+    assert context_window_pct("gpt-4o", 64_000) == pytest.approx(50.0)
+    assert context_window_pct("claude-sonnet-4-6", 200_000) == pytest.approx(100.0)
+    assert context_window_pct("unknown-model", 1000) is None
+
+
+def test_estimate_tokens_heuristic():
+    from app.services.pricing import estimate_tokens
+    messages = [{"role": "user", "content": "Hello world"}]
+    tokens = estimate_tokens("anthropic", "claude-sonnet-4-6", messages)
+    assert tokens > 0
+
+
+def test_estimate_endpoint():
+    with TestClient(app) as client:
+        res = client.post("/estimate", json={
+            "provider": "openai",
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "Hello, how are you?"}],
+        })
+    assert res.status_code == 200
+    data = res.json()
+    assert "estimated_input_tokens" in data
+    assert "estimated_cost_usd" in data
+    assert "context_pct" in data
+    assert data["estimated_input_tokens"] > 0
+    assert data["context_pct"] is not None
+
+
+def test_analytics_rate_limits_empty():
+    with TestClient(app) as client:
+        res = client.get("/analytics/rate-limits")
+    assert res.status_code == 200
+    assert isinstance(res.json(), list)
+
+
+def test_analytics_errors_empty():
+    with TestClient(app) as client:
+        res = client.get("/analytics/errors")
+    assert res.status_code == 200
+    assert isinstance(res.json(), list)
+
+
+def test_requests_response_includes_context_fields():
+    with TestClient(app) as client:
+        res = client.get("/analytics/requests")
+    assert res.status_code == 200
+    data = res.json()
+    assert isinstance(data, list)

@@ -28,7 +28,8 @@ export class StatusBarController {
     const tokens = fmtTokens(metrics.sessionTokens);
     const cost = fmtCost(metrics.sessionCost);
     const icon = metrics.wsConnected ? "$(pulse)" : "$(radio-tower)";
-    this.item.text = `${icon} ${tokens} · ${cost}`;
+    const cacheLabel = metrics.cacheActive ? " · ⚡cache" : "";
+    this.item.text = `${icon} ${tokens} · ${cost}${cacheLabel}`;
 
     const providerLines = (metrics.usageByProvider ?? [])
       .map((u) => `  ${u.provider}: ${fmtTokens(u.totalInputTokens + u.totalOutputTokens)} · ${fmtCost(u.totalCost)}`)

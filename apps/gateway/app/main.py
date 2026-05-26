@@ -11,6 +11,7 @@ from app.routers.proxy import router as proxy_router
 from app.routers.ollama_health import router as ollama_health_router
 from app.routers.budgets import router as budgets_router
 from app.routers.teams import router as teams_router
+from app.routers.estimate import router as estimate_router
 from app.adapters.registry import known_providers
 from app.services.session_service import reset_all_sessions
 
@@ -43,6 +44,7 @@ app.include_router(proxy_router)
 app.include_router(ollama_health_router)
 app.include_router(budgets_router)
 app.include_router(teams_router)
+app.include_router(estimate_router)
 
 
 @app.get("/providers")

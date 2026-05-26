@@ -138,6 +138,7 @@ async def proxy(
         streaming=False,
         temperature=temperature,
         team_id=team_id,
+        status_code=upstream.status_code,
     )
 
     resp_headers = {

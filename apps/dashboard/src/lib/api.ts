@@ -51,6 +51,22 @@ export async function fetchCacheMetrics(teamId?: string | null) {
   return res.json();
 }
 
+export async function fetchRateLimits(teamId?: string | null) {
+  const params = new URLSearchParams();
+  if (teamId) params.set("team_id", teamId);
+  const res = await fetch(`${GATEWAY_URL}/analytics/rate-limits?${params}`);
+  if (!res.ok) throw new Error("Failed to fetch rate limits");
+  return res.json();
+}
+
+export async function fetchErrors(teamId?: string | null) {
+  const params = new URLSearchParams();
+  if (teamId) params.set("team_id", teamId);
+  const res = await fetch(`${GATEWAY_URL}/analytics/errors?${params}`);
+  if (!res.ok) throw new Error("Failed to fetch error rates");
+  return res.json();
+}
+
 // ── budget API ────────────────────────────────────────────────────────────────
 
 export interface BudgetCreate {

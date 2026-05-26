@@ -5,12 +5,27 @@ import { useMetricsStore } from "@/lib/store";
 import { formatCost, formatTokens, formatLatency, PROVIDER_COLORS } from "@/lib/utils";
 import { TokenUsageChart } from "@/components/charts/TokenUsageChart";
 import { Activity, DollarSign, Zap, Layers } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { fetchRateLimits } from "@/lib/api";
 import type { TokenUsageSummary } from "@observaai/shared-types";
+
+interface RateLimitEntry {
+  provider: string;
+  tokens_5h: number;
+  tokens_7d: number;
+  reset_5h_at: string;
+  reset_7d_at: string;
+}
 
 export function LiveOverview() {
   const isConnected = useMetricsStore((s) => s.isConnected);
   const wsMetrics = useMetricsStore((s) => s.metrics);
   const { data: restData, isLoading, error } = useLiveMetrics();
+  const { data: rateLimits } = useQuery<RateLimitEntry[]>({
+    queryKey: ["rate-limits"],
+    queryFn: () => fetchRateLimits(),
+    refetchInterval: 60_000,
+  });
 
   // Prefer WS data; fall back to REST
   const data = wsMetrics ?? restData;
@@ -96,6 +111,18 @@ export function LiveOverview() {
           <TokenUsageChart data={usage} />
         </div>
       )}
+
+      {/* Rolling rate-limit windows */}
+      {rateLimits && rateLimits.length > 0 && (
+        <div className="card p-5">
+          <h3 className="text-sm font-semibold text-slate-300 mb-4">Rolling Token Windows</h3>
+          <div className="space-y-3">
+            {rateLimits.map((entry) => (
+              <RateLimitRow key={entry.provider} entry={entry} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -151,6 +178,32 @@ function Metric({ label, value, color }: { label: string; value: string; color: 
     <div>
       <p className="text-[10px] text-slate-600 uppercase tracking-wider">{label}</p>
       <p className={`${color} font-medium`}>{value}</p>
+    </div>
+  );
+}
+
+function RateLimitRow({ entry }: { entry: RateLimitEntry }) {
+  const color = PROVIDER_COLORS[entry.provider] ?? "#64748b";
+  const reset5h = new Date(entry.reset_5h_at);
+  const now = Date.now();
+  const minsUntil5h = Math.max(0, Math.round((reset5h.getTime() - now) / 60_000));
+  return (
+    <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 w-28 shrink-0">
+        <span className="w-2 h-2 rounded-full" style={{ background: color }} />
+        <span className="text-xs text-slate-300 capitalize">{entry.provider}</span>
+      </div>
+      <div className="flex gap-6 text-xs font-mono">
+        <div>
+          <p className="text-[10px] text-slate-600 uppercase tracking-wider">Last 5h</p>
+          <p className="text-blue-400">{formatTokens(entry.tokens_5h)}</p>
+          <p className="text-[10px] text-slate-600">resets in {minsUntil5h}m</p>
+        </div>
+        <div>
+          <p className="text-[10px] text-slate-600 uppercase tracking-wider">Last 7d</p>
+          <p className="text-indigo-400">{formatTokens(entry.tokens_7d)}</p>
+        </div>
+      </div>
     </div>
   );
 }

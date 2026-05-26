@@ -11,6 +11,18 @@ PRICING: dict[tuple[str, str], tuple[float, float]] = {
     ("ollama",    "local"):             (0.0,   0.0),
 }
 
+# Context window size per model (in tokens).
+CONTEXT_LIMITS: dict[str, int] = {
+    "claude-opus-4-7":    200_000,
+    "claude-sonnet-4-6":  200_000,
+    "claude-haiku-4-5":   200_000,
+    "gpt-4o":             128_000,
+    "gpt-4o-mini":        128_000,
+    "o3":                 200_000,
+    "gemini-2.5-pro":   1_048_576,
+    "gemini-2.5-flash": 1_048_576,
+}
+
 # Fraction of the input price that cached tokens are billed at.
 # Savings = cached_tokens * input_price * (1 - CACHE_RATE[provider])
 _CACHE_RATE: dict[str, float] = {
@@ -47,3 +59,35 @@ def estimate_cache_savings(provider: str, model: str, cached_tokens: int) -> flo
     full_cost = (cached_tokens / 1_000_000) * input_price
     actual_cost = full_cost * cache_rate
     return full_cost - actual_cost
+
+
+def context_window_pct(model: str, input_tokens: int) -> float | None:
+    """Return input_tokens as a percentage of the model's context window, or None if unknown."""
+    limit = next(
+        (v for k, v in CONTEXT_LIMITS.items() if model == k or model.startswith(k)),
+        None,
+    )
+    if limit is None:
+        return None
+    return round(input_tokens / limit * 100, 1)
+
+
+def estimate_tokens(provider: str, model: str, messages: list[dict]) -> int:
+    """Estimate input token count from messages without an API call."""
+    text = " ".join(
+        part if isinstance(part, str) else part.get("text", "")
+        for m in messages
+        for part in ([m.get("content", "")] if isinstance(m.get("content"), str) else (m.get("content") or []))
+    )
+    if provider == "openai":
+        try:
+            import tiktoken
+            try:
+                enc = tiktoken.encoding_for_model(model)
+            except KeyError:
+                enc = tiktoken.get_encoding("o200k_base")
+            return len(enc.encode(text))
+        except Exception:
+            pass
+    # Generic heuristic: ~4 characters per token
+    return max(1, len(text) // 4)

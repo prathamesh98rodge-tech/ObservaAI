@@ -15,6 +15,7 @@ interface ApiRequest {
   id: string; provider: string; model: string; session_id: string;
   input_tokens: number; output_tokens: number; latency_ms: number;
   estimated_cost: number; streaming: boolean; created_at: string;
+  context_pct: number | null; cache_active: boolean | null; status_code: number | null;
 }
 
 function formatDateTime(iso: string): string {
@@ -152,20 +153,24 @@ export default function SessionsPage() {
                       <p className="px-8 py-4 text-xs text-slate-500">No requests for this session.</p>
                     ) : (
                       <>
-                        <div className="grid grid-cols-[1.5fr_1.5fr_1fr_1fr_1fr_1fr] gap-4 px-8 py-2 text-[10px] uppercase tracking-wider text-slate-600 font-semibold border-b border-[#1e1e2e]">
+                        <div className="grid grid-cols-[1.5fr_1.5fr_1fr_1fr_1fr_1fr_1fr_1fr] gap-3 px-8 py-2 text-[10px] uppercase tracking-wider text-slate-600 font-semibold border-b border-[#1e1e2e]">
                           <span>Provider / Model</span>
                           <span>Time</span>
                           <span>Input Tokens</span>
                           <span>Output Tokens</span>
+                          <span>Ctx %</span>
+                          <span>Cache</span>
                           <span>Latency</span>
                           <span>Cost</span>
                         </div>
                         {sessionRequests.map((req) => {
                           const color = PROVIDER_COLORS[req.provider] ?? "#64748b";
+                          const ctx = req.context_pct;
+                          const ctxColor = ctx == null ? "text-slate-600" : ctx >= 80 ? "text-red-400" : ctx >= 50 ? "text-yellow-400" : "text-green-400";
                           return (
                             <div
                               key={req.id}
-                              className="grid grid-cols-[1.5fr_1.5fr_1fr_1fr_1fr_1fr] gap-4 px-8 py-3 text-sm border-b border-[#1e1e2e] last:border-0 hover:bg-white/1"
+                              className="grid grid-cols-[1.5fr_1.5fr_1fr_1fr_1fr_1fr_1fr_1fr] gap-3 px-8 py-3 text-sm border-b border-[#1e1e2e] last:border-0 hover:bg-white/1"
                             >
                               <div className="flex items-center gap-2">
                                 <span
@@ -185,6 +190,16 @@ export default function SessionsPage() {
                               </span>
                               <span className="font-mono text-green-400">
                                 {formatTokens(req.output_tokens)}
+                              </span>
+                              <span className={`font-mono text-xs ${ctxColor}`}>
+                                {ctx != null ? `${ctx}%` : "—"}
+                              </span>
+                              <span className="text-xs">
+                                {req.cache_active
+                                  ? <span className="text-emerald-400">⚡ active</span>
+                                  : req.cache_active === false && req.context_pct != null
+                                  ? <span className="text-slate-600">expired</span>
+                                  : <span className="text-slate-700">—</span>}
                               </span>
                               <span className="font-mono text-yellow-400">
                                 {formatLatency(req.latency_ms)}

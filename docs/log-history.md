@@ -351,6 +351,6 @@ ObservaAI/
 | 7 | Multi-workspace teams + API key auth | ✅ |
 | 8 | JetBrains plugin | ✅ |
 | 9 | Marketplace release packaging (CI/CD, icons, store metadata) | ✅ |
-| 10 | Context window %, cache expiry, rate-limit windows, /estimate | ⬜ |
+| 10 | Context window %, cache expiry, rate-limit windows, /estimate | ✅ |
 | 11 | Cost forecasting + anomaly detection | ⬜ |
 | 12 | Self-hosted Helm chart / Railway deploy button | ⬜ |

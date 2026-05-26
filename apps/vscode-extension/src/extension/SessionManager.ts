@@ -29,6 +29,7 @@ export interface ExtendedMetrics extends LiveMetrics {
   wsConnected: boolean;
   ollamaRunning: OllamaRunningModel[];
   budgetAlerts: BudgetAlert[];
+  cacheActive: boolean;
 }
 
 const POLL_INTERVAL_MS = 8_000;
@@ -64,6 +65,9 @@ export class SessionManager extends EventEmitter {
 
     this.fetchBudgetAlerts();
     this.budgetTimer = setInterval(() => this.fetchBudgetAlerts(), BUDGET_POLL_INTERVAL_MS);
+
+    // Check cache status alongside regular poll
+    this.fetchCacheStatus();
   }
 
   reset() {
@@ -107,12 +111,25 @@ export class SessionManager extends EventEmitter {
         const data = await res.json() as LiveMetrics;
         this.state = { ...this.state, ...data, gatewayOnline: true };
         this.emit("update", this.state);
+        // Refresh cache status on every metrics poll
+        this.fetchCacheStatus();
       } else {
         this.setOffline();
       }
     } catch {
       this.setOffline();
     }
+  }
+
+  private async fetchCacheStatus() {
+    try {
+      const res = await fetch(`${this.gatewayUrl()}/analytics/requests?limit=1`, { headers: this.teamHeaders() });
+      if (!res.ok) return;
+      const data = await res.json() as Array<{ cache_active?: boolean }>;
+      const cacheActive = data.length > 0 && data[0].cache_active === true;
+      this.state = { ...this.state, cacheActive };
+      this.emit("update", this.state);
+    } catch { /* leave existing state */ }
   }
 
   private async fetchOllamaMetrics() {
@@ -235,6 +252,7 @@ export class SessionManager extends EventEmitter {
       wsConnected: false,
       ollamaRunning: [],
       budgetAlerts: [],
+      cacheActive: false,
     };
   }
 }
