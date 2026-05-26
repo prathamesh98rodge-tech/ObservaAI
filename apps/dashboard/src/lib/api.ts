@@ -36,4 +36,10 @@ export async function fetchRequests(sessionId?: string) {
   return res.json();
 }
 
+export async function fetchTimeline(granularity: "minute" | "hour" | "day" = "hour") {
+  const res = await fetch(`${GATEWAY_URL}/analytics/timeline?granularity=${granularity}`);
+  if (!res.ok) throw new Error("Failed to fetch timeline");
+  return res.json();
+}
+
 export const GATEWAY_WS_URL = GATEWAY_URL.replace(/^http/, "ws") + "/ws/metrics";

@@ -1,33 +1,77 @@
 "use client";
 
 import { useLiveMetrics } from "@/hooks/useLiveMetrics";
+import { useMetricsStore } from "@/lib/store";
 import { formatCost, formatTokens, formatLatency, PROVIDER_COLORS } from "@/lib/utils";
+import { TokenUsageChart } from "@/components/charts/TokenUsageChart";
 import { Activity, DollarSign, Zap, Layers } from "lucide-react";
+import type { TokenUsageSummary } from "@observaai/shared-types";
 
 export function LiveOverview() {
-  const { data, isLoading, error } = useLiveMetrics();
+  const isConnected = useMetricsStore((s) => s.isConnected);
+  const wsMetrics = useMetricsStore((s) => s.metrics);
+  const { data: restData, isLoading, error } = useLiveMetrics();
 
-  if (isLoading) return <LoadingState />;
-  if (error) return <EmptyState />;
+  // Prefer WS data; fall back to REST
+  const data = wsMetrics ?? restData;
 
-  const usage = data?.usageByProvider ?? [];
+  if (!wsMetrics && isLoading) return <LoadingState />;
+  if (!wsMetrics && error && !data) return <EmptyState />;
+
+  const usage: TokenUsageSummary[] = data?.usageByProvider ?? [];
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-slate-100">Live Overview</h2>
-        <p className="text-sm text-slate-500 mt-0.5">Real-time AI usage across all providers</p>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-100">Live Overview</h2>
+          <p className="text-sm text-slate-500 mt-0.5">Real-time AI usage across all providers</p>
+        </div>
+        {/* Live indicator */}
+        <div className="flex items-center gap-2 text-xs">
+          <span
+            className={`w-2 h-2 rounded-full ${
+              isConnected ? "bg-green-500 animate-pulse" : "bg-slate-600"
+            }`}
+          />
+          <span className={isConnected ? "text-green-400" : "text-slate-500"}>
+            {isConnected ? "Live" : "Polling"}
+          </span>
+        </div>
       </div>
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard icon={Layers} label="Total Tokens" value={formatTokens(data?.sessionTokens ?? 0)} color="text-blue-400" />
-        <StatCard icon={DollarSign} label="Total Cost" value={formatCost(data?.sessionCost ?? 0)} color="text-emerald-400" />
-        <StatCard icon={Zap} label="Avg Latency" value={formatLatency(data?.avgLatencyMs ?? 0)} color="text-yellow-400" />
-        <StatCard icon={Activity} label="Requests" value={String(usage.reduce((s: number, u: { requestCount: number }) => s + u.requestCount, 0))} color="text-indigo-400" />
+        <StatCard
+          icon={Layers}
+          label="Total Tokens"
+          value={formatTokens(data?.sessionTokens ?? 0)}
+          color="text-blue-400"
+        />
+        <StatCard
+          icon={DollarSign}
+          label="Total Cost"
+          value={formatCost(data?.sessionCost ?? 0)}
+          color="text-emerald-400"
+        />
+        <StatCard
+          icon={Zap}
+          label="Avg Latency"
+          value={formatLatency(data?.avgLatencyMs ?? 0)}
+          color="text-yellow-400"
+        />
+        <StatCard
+          icon={Activity}
+          label="Requests"
+          value={String(
+            usage.reduce((s, u) => s + u.requestCount, 0)
+          )}
+          color="text-indigo-400"
+        />
       </div>
 
-      {/* Per-provider rows */}
+      {/* Per-provider table */}
       <div className="card p-0 overflow-hidden">
         <div className="px-5 py-4 border-b border-[#1e1e2e]">
           <h3 className="text-sm font-semibold text-slate-300">Provider Breakdown</h3>
@@ -38,25 +82,30 @@ export function LiveOverview() {
           </div>
         ) : (
           <div className="divide-y divide-[#1e1e2e]">
-            {usage.map((u: {
-              provider: string;
-              model: string;
-              totalInputTokens: number;
-              totalOutputTokens: number;
-              totalCost: number;
-              avgLatencyMs: number;
-              requestCount: number;
-            }) => (
+            {usage.map((u) => (
               <ProviderRow key={`${u.provider}-${u.model}`} usage={u} />
             ))}
           </div>
         )}
       </div>
+
+      {/* Token usage chart */}
+      {usage.length > 0 && (
+        <div className="card p-5">
+          <h3 className="text-sm font-semibold text-slate-300 mb-4">Token Usage by Provider</h3>
+          <TokenUsageChart data={usage} />
+        </div>
+      )}
     </div>
   );
 }
 
-function StatCard({ icon: Icon, label, value, color }: {
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  color,
+}: {
   icon: React.ElementType;
   label: string;
   value: string;
@@ -75,15 +124,7 @@ function StatCard({ icon: Icon, label, value, color }: {
   );
 }
 
-function ProviderRow({ usage }: { usage: {
-  provider: string;
-  model: string;
-  totalInputTokens: number;
-  totalOutputTokens: number;
-  totalCost: number;
-  avgLatencyMs: number;
-  requestCount: number;
-}}) {
+function ProviderRow({ usage }: { usage: TokenUsageSummary }) {
   const color = PROVIDER_COLORS[usage.provider] ?? "#64748b";
   return (
     <div className="px-5 py-4 flex items-center justify-between gap-4">
@@ -120,7 +161,7 @@ function LoadingState() {
       <div className="h-8 w-48 bg-white/5 rounded animate-pulse" />
       <div className="grid grid-cols-4 gap-4">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="card p-4 h-20 animate-pulse bg-white/3" />
+          <div key={i} className="card p-4 h-20 animate-pulse bg-white/5" />
         ))}
       </div>
     </div>
