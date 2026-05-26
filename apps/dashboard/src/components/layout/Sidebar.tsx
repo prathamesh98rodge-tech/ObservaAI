@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, BarChart2, DollarSign, History, Settings, Zap } from "lucide-react";
+import { LayoutDashboard, BarChart2, DollarSign, History, Settings, Zap, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/",          label: "Overview",  icon: LayoutDashboard },
   { href: "/providers", label: "Providers", icon: BarChart2 },
   { href: "/costs",     label: "Costs",     icon: DollarSign },
+  { href: "/budgets",   label: "Budgets",   icon: Bell },
   { href: "/sessions",  label: "Sessions",  icon: History },
   { href: "/routing",   label: "Routing",   icon: Zap },
   { href: "/settings",  label: "Settings",  icon: Settings },

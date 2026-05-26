@@ -203,6 +203,29 @@ export class MetricsPanelProvider implements vscode.WebviewViewProvider {
       }).join('');
     }
 
+    function renderBudgetAlerts(alerts) {
+      if (!alerts || !alerts.length) return '';
+      return '<div class="sec-hdr">Budget Alerts</div>' + alerts.map(a => {
+        const isExceeded = a.level === 'exceeded';
+        const color = isExceeded ? '#f87171' : '#fbbf24';
+        const icon = isExceeded ? '✗' : '!';
+        const pct = (a.spend_pct * 100).toFixed(0);
+        const label = a.label || \`\${a.provider ?? 'all'} · \${a.period}\`;
+        return \`
+          <div class="provider" style="--accent:\${color}">
+            <div class="prov-header">
+              <span style="color:\${color};font-weight:600">\${icon} \${label}</span>
+              <span class="m-val" style="color:\${color}">\${pct}%</span>
+            </div>
+            <div class="prov-grid">
+              <div><div class="m-lbl">Spent</div><div class="m-val" style="color:\${color}">\${fmtCost(a.spend_usd)}</div></div>
+              <div><div class="m-lbl">Limit</div><div class="m-val" style="color:#94a3b8">\${fmtCost(a.limit_usd)}</div></div>
+            </div>
+          </div>
+        \`;
+      }).join('');
+    }
+
     function renderActions() {
       return \`
         <div class="actions">
@@ -219,6 +242,7 @@ export class MetricsPanelProvider implements vscode.WebviewViewProvider {
 
       document.getElementById('root').innerHTML =
         renderConn(m) +
+        renderBudgetAlerts(m.budgetAlerts) +
         (hasData ? renderSummary(m) : '') +
         renderProviders(m.usageByProvider) +
         renderOllama(m.ollamaRunning) +

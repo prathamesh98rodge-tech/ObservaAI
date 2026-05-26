@@ -12,14 +12,28 @@ export interface OllamaRunningModel {
   details?: Record<string, unknown>;
 }
 
+export interface BudgetAlert {
+  budget_id: string;
+  label: string;
+  level: "warning" | "exceeded";
+  spend_usd: number;
+  limit_usd: number;
+  spend_pct: number;
+  provider: string | null;
+  workspace: string | null;
+  period: string;
+}
+
 export interface ExtendedMetrics extends LiveMetrics {
   gatewayOnline: boolean;
   wsConnected: boolean;
   ollamaRunning: OllamaRunningModel[];
+  budgetAlerts: BudgetAlert[];
 }
 
 const POLL_INTERVAL_MS = 8_000;
 const OLLAMA_POLL_INTERVAL_MS = 15_000;
+const BUDGET_POLL_INTERVAL_MS = 30_000;
 const WS_RECONNECT_BASE_MS = 2_000;
 const WS_RECONNECT_MAX_MS = 30_000;
 
@@ -29,9 +43,13 @@ export class SessionManager extends EventEmitter {
   private ws: WebSocket | null = null;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private ollamaTimer: ReturnType<typeof setInterval> | null = null;
+  private budgetTimer: ReturnType<typeof setInterval> | null = null;
   private wsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private wsReconnectDelay = WS_RECONNECT_BASE_MS;
   private wsIntentionalClose = false;
+
+  // Track previously-seen alert IDs to fire notifications only on new ones
+  private seenAlertIds = new Set<string>();
 
   start() {
     this.tryConnectWs();
@@ -43,10 +61,14 @@ export class SessionManager extends EventEmitter {
       this.fetchOllamaMetrics();
       this.ollamaTimer = setInterval(() => this.fetchOllamaMetrics(), OLLAMA_POLL_INTERVAL_MS);
     }
+
+    this.fetchBudgetAlerts();
+    this.budgetTimer = setInterval(() => this.fetchBudgetAlerts(), BUDGET_POLL_INTERVAL_MS);
   }
 
   reset() {
     this.state = this.defaultState();
+    this.seenAlertIds.clear();
     this.emit("update", this.state);
   }
 
@@ -58,6 +80,7 @@ export class SessionManager extends EventEmitter {
     this.wsIntentionalClose = true;
     if (this.pollTimer) clearInterval(this.pollTimer);
     if (this.ollamaTimer) clearInterval(this.ollamaTimer);
+    if (this.budgetTimer) clearInterval(this.budgetTimer);
     if (this.wsReconnectTimer) clearTimeout(this.wsReconnectTimer);
     this.ws?.close();
   }
@@ -95,6 +118,49 @@ export class SessionManager extends EventEmitter {
       }
     } catch {
       // Ollama offline — leave existing metrics
+    }
+  }
+
+  private async fetchBudgetAlerts() {
+    try {
+      const res = await fetch(`${this.gatewayUrl()}/budgets/alerts`);
+      if (!res.ok) return;
+      const data = await res.json() as { alerts: BudgetAlert[] };
+      const alerts = data.alerts ?? [];
+
+      // Fire VS Code notifications for newly triggered alerts
+      for (const alert of alerts) {
+        const key = `${alert.budget_id}:${alert.level}`;
+        if (!this.seenAlertIds.has(key)) {
+          this.seenAlertIds.add(key);
+          const pct = (alert.spend_pct * 100).toFixed(0);
+          const label = alert.label || `${alert.provider ?? "all"} · ${alert.period}`;
+          const msg = alert.level === "exceeded"
+            ? `ObservaAI: Budget EXCEEDED — ${label} ($${alert.spend_usd.toFixed(2)} / $${alert.limit_usd})`
+            : `ObservaAI: Budget alert — ${label} at ${pct}% ($${alert.spend_usd.toFixed(2)} / $${alert.limit_usd})`;
+
+          if (alert.level === "exceeded") {
+            vscode.window.showErrorMessage(msg, "Open Dashboard").then((action) => {
+              if (action) vscode.commands.executeCommand("observaai.openDashboard");
+            });
+          } else {
+            vscode.window.showWarningMessage(msg, "Open Dashboard").then((action) => {
+              if (action) vscode.commands.executeCommand("observaai.openDashboard");
+            });
+          }
+        }
+      }
+
+      // Remove cleared alerts from seen set so they re-notify if they cross again
+      const activeKeys = new Set(alerts.map((a) => `${a.budget_id}:${a.level}`));
+      for (const key of this.seenAlertIds) {
+        if (!activeKeys.has(key)) this.seenAlertIds.delete(key);
+      }
+
+      this.state = { ...this.state, budgetAlerts: alerts };
+      this.emit("update", this.state);
+    } catch {
+      // Gateway offline — leave existing alert state
     }
   }
 
@@ -161,6 +227,7 @@ export class SessionManager extends EventEmitter {
       gatewayOnline: false,
       wsConnected: false,
       ollamaRunning: [],
+      budgetAlerts: [],
     };
   }
 }

@@ -48,4 +48,47 @@ export async function fetchCacheMetrics() {
   return res.json();
 }
 
+// ── budget API ────────────────────────────────────────────────────────────────
+
+export interface BudgetCreate {
+  label?: string;
+  workspace_name?: string;
+  provider?: string;
+  period?: "day" | "week" | "month";
+  limit_usd: number;
+  alert_pct?: number;
+  webhook_url?: string;
+}
+
+export async function fetchBudgets() {
+  const res = await fetch(`${GATEWAY_URL}/budgets`);
+  if (!res.ok) throw new Error("Failed to fetch budgets");
+  return res.json();
+}
+
+export async function createBudget(body: BudgetCreate) {
+  const res = await fetch(`${GATEWAY_URL}/budgets`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error("Failed to create budget");
+  return res.json();
+}
+
+export async function updateBudget(id: string, body: Partial<BudgetCreate & { enabled: boolean }>) {
+  const res = await fetch(`${GATEWAY_URL}/budgets/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error("Failed to update budget");
+  return res.json();
+}
+
+export async function deleteBudget(id: string) {
+  const res = await fetch(`${GATEWAY_URL}/budgets/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete budget");
+}
+
 export const GATEWAY_WS_URL = GATEWAY_URL.replace(/^http/, "ws") + "/ws/metrics";

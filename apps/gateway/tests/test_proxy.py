@@ -294,3 +294,69 @@ def test_anthropic_cached_token_extraction():
     stats = extract_usage(response_with_cache)
     assert stats.input_tokens == 500
     assert stats.cached_tokens == 400
+
+
+# ── budget tests ──────────────────────────────────────────────────────────────
+
+def test_budgets_empty():
+    with TestClient(app) as client:
+        res = client.get("/budgets")
+    assert res.status_code == 200
+    assert res.json() == []
+
+
+def test_budgets_alerts_empty():
+    with TestClient(app) as client:
+        res = client.get("/budgets/alerts")
+    assert res.status_code == 200
+    assert res.json() == {"alerts": []}
+
+
+def test_budget_create_and_delete():
+    with TestClient(app) as client:
+        create_res = client.post("/budgets", json={
+            "label": "Test budget",
+            "provider": "openai",
+            "period": "month",
+            "limit_usd": 50.0,
+            "alert_pct": 0.8,
+        })
+        assert create_res.status_code == 201
+        budget = create_res.json()
+        assert budget["label"] == "Test budget"
+        assert budget["limit_usd"] == 50.0
+        assert budget["level"] == "ok"
+        assert budget["spend_usd"] == 0.0
+
+        # list — should have 1
+        list_res = client.get("/budgets")
+        assert len(list_res.json()) == 1
+
+        # update
+        patch_res = client.patch(f"/budgets/{budget['id']}", json={"limit_usd": 100.0})
+        assert patch_res.status_code == 200
+        assert patch_res.json()["limit_usd"] == 100.0
+
+        # delete
+        del_res = client.delete(f"/budgets/{budget['id']}")
+        assert del_res.status_code == 204
+
+        list_res2 = client.get("/budgets")
+        assert list_res2.json() == []
+
+
+def test_budget_delete_not_found():
+    with TestClient(app) as client:
+        res = client.delete("/budgets/nonexistent-id")
+    assert res.status_code == 404
+
+
+def test_budget_level_computation():
+    """Budget level is derived from current spend — ok / warning / exceeded."""
+    from app.routers.budgets import _level
+    assert _level(0.0, 0.8) == "ok"
+    assert _level(0.79, 0.8) == "ok"
+    assert _level(0.80, 0.8) == "warning"
+    assert _level(0.99, 0.8) == "warning"
+    assert _level(1.0, 0.8) == "exceeded"
+    assert _level(1.5, 0.8) == "exceeded"
