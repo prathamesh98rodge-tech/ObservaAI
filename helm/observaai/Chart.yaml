@@ -1,0 +1,14 @@
+apiVersion: v2
+name: observaai
+description: Unified AI usage monitor and multi-provider gateway
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - ai
+  - observability
+  - llm
+  - monitoring
+home: https://github.com/prathamesh98rodge-tech/ObservaAI
+maintainers:
+  - name: ObservaAI

@@ -1,0 +1,86 @@
+# ── Gateway (FastAPI) ─────────────────────────────────────────────────────────
+gateway:
+  image:
+    repository: ghcr.io/prathamesh98rodge-tech/observaai-gateway
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  port: 8000
+  env:
+    DEBUG: "false"
+    CORS_ORIGINS: '["http://localhost:3000"]'
+  # Provider API keys — injected as env vars via Secret
+  apiKeys: {}
+    # OPENAI_API_KEY: ""
+    # ANTHROPIC_API_KEY: ""
+    # GEMINI_API_KEY: ""
+    # OPENROUTER_API_KEY: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# ── Dashboard (Next.js) ───────────────────────────────────────────────────────
+dashboard:
+  image:
+    repository: ghcr.io/prathamesh98rodge-tech/observaai-dashboard
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  port: 3000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# ── Bundled Postgres StatefulSet ──────────────────────────────────────────────
+postgres:
+  enabled: true
+  image: postgres:16-alpine
+  port: 5432
+  storage: 5Gi
+  storageClass: ""        # "" = cluster default storage class
+  credentials:
+    user: observaai
+    password: observaai   # CHANGE THIS in production
+    database: observaai
+
+# Supply an external DATABASE_URL to skip the bundled Postgres entirely.
+# Example: "postgresql+asyncpg://user:pass@your-db-host:5432/observaai"
+externalDatabaseUrl: ""
+
+# ── Services ──────────────────────────────────────────────────────────────────
+service:
+  gateway:
+    type: ClusterIP
+    port: 8000
+  dashboard:
+    type: ClusterIP
+    port: 3000
+
+# ── Ingress ───────────────────────────────────────────────────────────────────
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  # Route /  → dashboard, /api → gateway when using a single host
+  hosts:
+    - host: observaai.example.com
+      paths:
+        - path: /api
+          pathType: Prefix
+          backend: gateway
+        - path: /
+          pathType: Prefix
+          backend: dashboard
+  tls: []
+    # - secretName: observaai-tls
+    #   hosts:
+    #     - observaai.example.com

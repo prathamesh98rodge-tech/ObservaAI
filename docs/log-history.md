@@ -32,8 +32,8 @@ URLs: Gateway → http://localhost:8000 | Dashboard → http://localhost:3000
 | CI/CD | GitHub Actions: ci.yml, release-vscode.yml, release-jetbrains.yml | — |
 
 **Active branch:** `main`  
-**Last completed week:** Week 12 — Cost forecasting + anomaly detection  
-**Next up:** Week 13 — Self-hosted Helm chart / Railway deploy button
+**Last completed week:** Week 13 — Helm chart + Railway deploy  
+**Next up:** (roadmap complete — see below for future ideas)
 
 ---
 
@@ -520,4 +520,4 @@ Once 11b is running, the manual "Update Subscription Usage" VS Code command and 
 | 11a | Subscription capacity tracking + provider handover | ✅ |
 | 11b | Browser companion extension (MV3) — auto-ingest from claude.ai / ChatGPT / Gemini | ✅ |
 | 12 | Cost forecasting + anomaly detection | ✅ |
-| 13 | Self-hosted Helm chart / Railway deploy button | ⬜ |
+| 13 | Self-hosted Helm chart / Railway deploy button | ✅ |

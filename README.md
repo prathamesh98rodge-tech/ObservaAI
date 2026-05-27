@@ -234,6 +234,45 @@ Configure under **Settings → Tools → ObservaAI**:
 | Team API Key | _(blank)_ | `obs-…` key scopes metrics to your workspace |
 | Enabled | `true` | Disable to pause telemetry collection |
 
+### Deploy on Railway
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/prathamesh98rodge-tech/ObservaAI)
+
+1. Click the button above — Railway clones the repo and detects the Dockerfiles automatically.
+2. Add a **PostgreSQL** plugin to the project; Railway injects `DATABASE_URL` as an env var.
+3. Set your provider API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.) as Railway env vars on the gateway service.
+4. Set `NEXT_PUBLIC_GATEWAY_URL` on the dashboard service to the gateway's Railway URL.
+
+Each service has a `railway.json` in its directory (`apps/gateway/`, `apps/dashboard/`) with build and health-check settings.
+
+### Self-host on Kubernetes (Helm)
+
+```bash
+# Install (bundled Postgres + gateway + dashboard)
+helm install observaai ./helm/observaai \
+  --set gateway.apiKeys.OPENAI_API_KEY=sk-... \
+  --set gateway.apiKeys.ANTHROPIC_API_KEY=sk-ant-...
+
+# Use an external database instead
+helm install observaai ./helm/observaai \
+  --set postgres.enabled=false \
+  --set externalDatabaseUrl="postgresql+asyncpg://user:pass@host:5432/observaai"
+
+# Enable Ingress
+helm install observaai ./helm/observaai \
+  --set ingress.enabled=true \
+  --set ingress.hosts[0].host=observaai.mycompany.com
+```
+
+The chart (`helm/observaai/`) deploys:
+- **Gateway** Deployment + ClusterIP Service
+- **Dashboard** Deployment + ClusterIP Service
+- **Postgres** StatefulSet + headless Service + PersistentVolumeClaim (5 Gi, skipped when `externalDatabaseUrl` is set)
+- **Secret** with `DATABASE_URL` + any API keys
+- Optional **Ingress** routing `/api` → gateway, `/` → dashboard
+
+See `helm/observaai/values.yaml` for all configuration options.
+
 ### Browser companion extension (Chrome / Chromium)
 
 The companion extension automatically ingests subscription usage from **claude.ai**,
