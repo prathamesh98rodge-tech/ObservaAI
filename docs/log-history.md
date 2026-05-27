@@ -32,8 +32,8 @@ URLs: Gateway → http://localhost:8000 | Dashboard → http://localhost:3000
 | CI/CD | GitHub Actions: ci.yml, release-vscode.yml, release-jetbrains.yml | — |
 
 **Active branch:** `main`  
-**Last completed week:** Week 11a — Subscription capacity tracking + provider handover  
-**Next up:** Week 11b — Browser companion extension (MV3) for automatic ingestion from claude.ai / chat.openai.com / gemini.google.com
+**Last completed week:** Week 11b — Browser companion extension (MV3)  
+**Next up:** Week 12 — Cost forecasting + anomaly detection
 
 ---
 
@@ -239,6 +239,34 @@ ObservaAI/
 - **Error rate analytics**: `status_code INTEGER` column + migration 008; proxy router passes upstream status on every non-streaming request; `GET /analytics/errors` aggregates error/total counts per provider in Python; `fetchErrors()` added to dashboard api.ts
 - **CI fixes**: Removed explicit `version:` from `pnpm/action-setup@v4` in `ci.yml` and `release-vscode.yml` — action reads `packageManager` from `package.json` automatically; specifying both causes `ERR_PNPM_BAD_PM_VERSION`
 - **Tests**: 10 new tests for Week 10 features (context_window_pct, estimate_tokens, /estimate, /rate-limits, /errors)
+
+### Week 11b — Browser companion extension (MV3)
+
+**Goal:** Automatically ingest subscription usage from claude.ai / ChatGPT / Gemini into ObservaAI — no manual input required.
+
+**New app:** `apps/browser-extension/`
+
+| File | Purpose |
+|---|---|
+| `manifest.json` | MV3 manifest — `storage` permission, host_permissions for 3 domains + localhost:8000 |
+| `background.js` | Service worker — receives `OBSERVAAI_USAGE` messages, POSTs to `/subscriptions/ingest`, tracks last-ingest status per provider in `chrome.storage.local` |
+| `content/claude.js` | Injects a `<script>` into the MAIN world to override `window.fetch` and tee SSE completion streams; listens for `message_limit` events (`{remaining, resetAt}`); ISOLATED-world relay debounces 5 s then sends to background; MutationObserver fallback scrapes visible usage text |
+| `content/openai.js` | MutationObserver DOM scraper — matches text patterns like "7 GPT-4o messages left until…" and "7 of 50 messages"; debounced 5 s |
+| `content/gemini.js` | MutationObserver + 30 s periodic poll for late-rendering Gemini SPA; same pattern matching |
+| `popup/popup.html+js` | Status popup: gateway connectivity dot, per-provider last-sync time (ok/error/never), "Settings" link via `chrome.runtime.openOptionsPage()` |
+| `options/options.html+js` | Single gateway-URL setting, persisted to `chrome.storage.local`; defaults to `http://localhost:8000` |
+
+**Key decisions**
+- MAIN-world fetch override via injected `<script>` (compatible with Chrome 88+, avoids `world: "MAIN"` content-script field which requires Chrome 111+)
+- `window.postMessage` bridge from MAIN-world interceptor → ISOLATED-world relay → background
+- 5 s debounce in content scripts; background does not re-debounce (MV3 service workers can be unloaded, storage is the source of truth)
+- Only talks to `http://localhost:8000` — never external servers
+
+**README updates**
+- Added "Browser companion extension" section under Usage
+- Added `browser-extension/` to monorepo layout
+
+---
 
 ### Week 11a — Subscription capacity tracking + provider handover
 **Commit:** `ead5b7f`
@@ -461,6 +489,6 @@ Once 11b is running, the manual "Update Subscription Usage" VS Code command and 
 | 9 | Marketplace release packaging (CI/CD, icons, store metadata) | ✅ |
 | 10 | Context window %, cache expiry, rate-limit windows, /estimate | ✅ |
 | 11a | Subscription capacity tracking + provider handover | ✅ |
-| 11b | Browser companion extension (MV3) — auto-ingest from claude.ai / ChatGPT / Gemini | ⬜ |
+| 11b | Browser companion extension (MV3) — auto-ingest from claude.ai / ChatGPT / Gemini | ✅ |
 | 12 | Cost forecasting + anomaly detection | ⬜ |
 | 13 | Self-hosted Helm chart / Railway deploy button | ⬜ |

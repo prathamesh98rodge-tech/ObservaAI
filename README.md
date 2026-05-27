@@ -120,7 +120,8 @@ ObservaAI/
 │   ├── gateway/             FastAPI proxy + analytics + budgets + teams API
 │   ├── dashboard/           Next.js 15 dashboard (App Router)
 │   ├── vscode-extension/    VS Code sidebar, status bar, budget alerts
-│   └── jetbrains-plugin/    IntelliJ Platform plugin (Kotlin/Gradle)
+│   ├── jetbrains-plugin/    IntelliJ Platform plugin (Kotlin/Gradle)
+│   └── browser-extension/   MV3 Chrome extension — auto-ingest from claude.ai / ChatGPT / Gemini
 ├── packages/
 │   ├── shared-types/        TypeScript types shared by dashboard ↔ extensions
 │   ├── provider-adapters/   Per-provider request/response helpers
@@ -232,6 +233,31 @@ Configure under **Settings → Tools → ObservaAI**:
 | Gateway URL | `http://localhost:8000` | URL of the running ObservaAI gateway |
 | Team API Key | _(blank)_ | `obs-…` key scopes metrics to your workspace |
 | Enabled | `true` | Disable to pause telemetry collection |
+
+### Browser companion extension (Chrome / Chromium)
+
+The companion extension automatically ingests subscription usage from **claude.ai**,
+**ChatGPT**, and **Gemini** into ObservaAI — no manual input required.
+
+**How it works:**
+- On **claude.ai**: intercepts the SSE stream and captures `message_limit` events
+  (remaining messages + reset time) in real time.
+- On **ChatGPT**: scrapes visible usage text ("7 GPT-4o messages left") with a
+  MutationObserver.
+- On **Gemini**: MutationObserver + periodic fallback for late-rendering SPAs.
+- All data is debounced (5 s) and POSTed to `http://localhost:8000/subscriptions/ingest`
+  via the background service worker.
+
+**Install (developer mode):**
+
+1. Open **Chrome → Settings → Extensions → Manage Extensions** → enable **Developer mode**.
+2. Click **Load unpacked** and select `apps/browser-extension/`.
+3. The ObservaAI icon appears in the toolbar. Click it to see sync status per provider.
+4. If your gateway runs on a different port, click **Settings** in the popup to update the URL.
+
+Once installed, every time you send a message in claude.ai / ChatGPT / Gemini the usage
+snapshot silently syncs to ObservaAI. Open the **Subscriptions** page in the dashboard
+(`http://localhost:3000/subscriptions`) to see the live capacity bars.
 
 ---
 

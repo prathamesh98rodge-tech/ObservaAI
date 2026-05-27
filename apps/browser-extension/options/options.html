@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ObservaAI Companion — Settings</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      max-width: 420px;
+      margin: 40px auto;
+      padding: 0 20px;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+      color: #111827;
+    }
+    h1 { font-size: 18px; margin-bottom: 24px; }
+    label { display: block; font-weight: 500; margin-bottom: 6px; }
+    input[type="url"] {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    input[type="url"]:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59,130,246,.15);
+    }
+    .hint { font-size: 12px; color: #6b7280; margin-top: 4px; }
+    button {
+      margin-top: 14px;
+      padding: 8px 20px;
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    button:hover { background: #2563eb; }
+    #saved { margin-top: 8px; color: #16a34a; font-size: 12px; display: none; }
+  </style>
+</head>
+<body>
+  <h1>ObservaAI Companion — Settings</h1>
+
+  <label for="gateway">Gateway URL</label>
+  <input id="gateway" type="url" placeholder="http://localhost:8000">
+  <p class="hint">Default: <code>http://localhost:8000</code>. Change only if your gateway runs on a different host or port.</p>
+
+  <button id="save">Save settings</button>
+  <p id="saved">Saved!</p>
+
+  <script src="options.js"></script>
+</body>
+</html>
