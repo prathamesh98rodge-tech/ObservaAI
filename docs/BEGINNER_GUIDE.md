@@ -202,6 +202,61 @@ You'll see:
 
 ---
 
+## Step 6 (optional): Auto-track Claude CLI / Codex CLI / Gemini CLI
+
+Do you use any of these in your terminal?
+
+- `claude` (Anthropic's official CLI)
+- `codex` (OpenAI's coding CLI)
+- `gemini` (Google AI Studio CLI)
+
+By default, ObservaAI **doesn't see them** — they talk directly to the provider. If
+you installed the VS Code extension in Step 5, you're already covered for any terminal
+you open inside VS Code. Here's what's happening behind the scenes and how to extend
+it to terminals outside VS Code.
+
+### Inside VS Code: automatic
+
+Open any new terminal inside VS Code (`` Ctrl+` ``) and run:
+
+```bash
+echo $ANTHROPIC_BASE_URL
+# → http://localhost:8000/proxy/anthropic
+```
+
+If you see that URL, you're good. Run `claude`, `codex`, or `gemini` normally and check
+the dashboard's **Live Overview** — a **CLI Activity** card will appear, and the
+**Sessions** page will tag those rows with a small terminal icon.
+
+You can toggle this in the status bar: the `● CLI proxy: active` chip. Click it to
+enable / disable injection without uninstalling the extension.
+
+### Outside VS Code: one-time shell setup
+
+For terminals outside VS Code (Warp, iTerm, Windows Terminal, etc.), open the VS Code
+Command Palette (`Ctrl+Shift+P`) and run:
+
+```
+ObservaAI: Configure Shell for CLI Detection
+```
+
+Pick your shell (bash / zsh / fish / PowerShell). The extension appends an idempotent
+export block to your shell profile (`.zshrc`, `.bashrc`, `config.fish`, or
+`Microsoft.PowerShell_profile.ps1`). **Restart your terminal once** and every CLI
+call routes through ObservaAI.
+
+### The bonus log watcher (Claude CLI only)
+
+Even when env injection is off, the VS Code extension also watches
+`~/.claude/projects/**/*.jsonl` — Claude CLI's local conversation log — and POSTs
+token counts to ObservaAI from there. So a Claude CLI session in *any* terminal,
+inside or outside VS Code, still shows up. No setup needed.
+
+If you ever want to verify it's working, run a quick Claude CLI session and look
+for it on the dashboard's **Sessions** page filtered by **Source = CLI**.
+
+---
+
 ## Everyday commands
 
 Once everything is set up, these are the commands you'll use:

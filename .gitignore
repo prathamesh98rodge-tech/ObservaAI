@@ -13,3 +13,6 @@ __pycache__/
 .DS_Store
 apps/jetbrains-plugin/.gradle/
 apps/jetbrains-plugin/build/
+*.tsbuildinfo
+apps/gateway/observaai.db
+apps/gateway/*.db

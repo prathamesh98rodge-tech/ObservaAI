@@ -7,6 +7,9 @@ import { WebSocketProvider } from "@/components/WebSocketProvider";
 export const metadata: Metadata = {
   title: "ObservaAI — AI Usage Monitor",
   description: "Unified observability and control platform for AI coding assistants",
+  icons: {
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -13,7 +13,7 @@ _Datadog + Grafana + Raycast for LLM workflows._
 [![Node](https://img.shields.io/badge/node-22+-339933.svg)](#)
 [![Next.js](https://img.shields.io/badge/next.js-15-black.svg)](#)
 [![FastAPI](https://img.shields.io/badge/fastapi-0.115-009688.svg)](#)
-[![Tests](https://img.shields.io/badge/tests-35%20passing-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-53%20passing-brightgreen.svg)](#testing)
 
 Route requests for **OpenAI · Anthropic · Gemini · Ollama · OpenRouter** through one
 gateway. See tokens, cost, latency and per-provider breakdowns live — from a web
@@ -73,6 +73,11 @@ ObservaAI sits between your code and the providers, transparently records every 
 - **Multi-workspace teams** — create named teams, issue `obs-…` API keys, scope all telemetry per team. Switch workspaces in the dashboard sidebar.
 - **VS Code extension** — status-bar token counter (+ ⚡cache indicator), sidebar live metrics, Ollama VRAM monitor, budget alert notifications, one-click proxy URL copy.
 - **JetBrains plugin** — same metrics in IntelliJ IDEA, PyCharm, GoLand, WebStorm; tool window + status bar + balloon notifications.
+- **CLI auto-detection** — Claude CLI, OpenAI Codex CLI, and Gemini CLI talk directly to provider APIs and are normally invisible. The VS Code extension fixes this by injecting `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`, and `GEMINI_API_BASE` into every new integrated terminal, plus a passive `~/.claude/projects/**/*.jsonl` log watcher that POSTs token counts to `/analytics/ingest-cli`. The Sessions page has a Source filter (Proxy / CLI / Manual) and Live Overview shows a CLI Activity card.
+- **Cost forecasting + anomaly detection** — `GET /analytics/forecast` projects weekly/monthly cost from the last 30 days; `GET /analytics/anomalies` flags requests with Z-score ≥ 2.5 on cost or token count. Both surface on the Live Overview.
+- **Browser companion extension** — MV3 Chrome extension auto-ingests subscription usage from claude.ai, ChatGPT, and Gemini into ObservaAI with zero manual input.
+- **Self-host on Kubernetes** — bundled Helm chart with Postgres StatefulSet, Secret-injected API keys, optional Ingress.
+- **One-click Railway deploy** — `railway.json` configs in `apps/gateway/` and `apps/dashboard/` for instant cloud hosting.
 - **Local-first** — SQLite by default, no external services, no telemetry. Your prompts stay on your machine.
 - **Postgres-ready** — swap to Postgres for production; Alembic migrations included.
 
@@ -298,6 +303,52 @@ Once installed, every time you send a message in claude.ai / ChatGPT / Gemini th
 snapshot silently syncs to ObservaAI. Open the **Subscriptions** page in the dashboard
 (`http://localhost:3000/subscriptions`) to see the live capacity bars.
 
+### CLI auto-detection (Claude CLI · Codex CLI · Gemini CLI)
+
+CLIs like `claude`, `codex`, and `gemini` normally talk directly to provider APIs, so
+ObservaAI never sees their traffic. The VS Code extension fixes this in three layers:
+
+| Layer | What it does | When it kicks in |
+|---|---|---|
+| **Static env contribution** | `terminal.integrated.env.{linux,osx,windows}` in `package.json` sets `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`, `GEMINI_API_BASE` for every terminal VS Code opens | Immediately, every new terminal |
+| **Dynamic `onDidOpenTerminal`** | When CLI Proxy is enabled, also re-exports the vars via `terminal.sendText` so they survive shell-rc resets | New terminals while extension is active |
+| **Claude CLI log watcher** | Watches `~/.claude/projects/**/*.jsonl`, parses new entries on file change, POSTs token counts to `POST /analytics/ingest-cli` (recorded with `source='cli-log'`); dedup set persisted in `globalState` | Any Claude CLI session, even if env injection is off |
+
+**Status bar:** `● CLI proxy: active` (click to toggle).
+**Sidebar filter:** Sessions page has a Source chip group — `All` / `Proxy` / `CLI` / `Manual`.
+**Live Overview:** CLI Activity card shows detected CLIs, tokens today, last seen time.
+
+If you use the CLIs outside VS Code, run:
+
+```
+ObservaAI: Configure Shell for CLI Detection   (Command Palette)
+```
+
+This calls `GET /setup/shell-exports`, detects your default shell (bash / zsh / fish / PowerShell),
+and idempotently appends a marker-wrapped export block to your shell profile so any future
+terminal session (Warp, iTerm, Windows Terminal, etc.) routes CLI traffic through ObservaAI too.
+
+```
+┌─────────────────┐    ANTHROPIC_BASE_URL    ┌──────────────────────┐
+│ Claude CLI      │ ──────────────────────►  │ ObservaAI Gateway    │
+│ Codex CLI       │     OPENAI_BASE_URL      │ /proxy/<provider>    │
+│ Gemini CLI      │     GEMINI_API_BASE      │  source = 'proxy'    │
+└─────────────────┘                          └──────────┬───────────┘
+                                                        │
+┌─────────────────┐                                     │
+│ Claude CLI logs │ ──── log watcher (passive) ────►    │
+│ ~/.claude/      │     POST /analytics/ingest-cli      │
+│   projects/...  │       source = 'cli-log'            │
+└─────────────────┘                                     │
+                                                        ▼
+                                              ┌──────────────────────┐
+                                              │ Live Overview        │
+                                              │  · CLI Activity card │
+                                              │ Sessions page        │
+                                              │  · Source filter     │
+                                              └──────────────────────┘
+```
+
 ---
 
 ## Configuration
@@ -338,7 +389,7 @@ make dev                # gateway (port 8000) + dashboard (port 3000)
 ### Useful commands
 
 ```bash
-make test               # gateway pytest suite (25 tests)
+make test               # gateway pytest suite (53 tests)
 make typecheck          # tsc --noEmit across all TS apps
 make build              # production build of dashboard + VS Code extension
 make build-jetbrains    # build JetBrains plugin ZIP (needs JDK 21 + network)
@@ -364,7 +415,7 @@ make migrate            # apply pending Alembic migrations (Postgres)
 
 ```bash
 make test
-# 35 passed in ~1s
+# 53 passed in ~15s
 ```
 
 Covers:
@@ -418,9 +469,10 @@ If you deploy the gateway behind a public hostname:
 | ✅ | VS Code + JetBrains Marketplace releases (CI/CD workflows, packaging, icons, store metadata) |
 | ✅ | Context window % per request, cache expiry indicator, rolling rate-limit windows, `/estimate` endpoint, error rate analytics |
 | ✅ | Subscription capacity tracking — ingest Claude Pro / ChatGPT Plus / Gemini Pro hourly·daily·weekly usage; progress bars in VS Code sidebar + dashboard `/subscriptions`; `POST /handover/generate` packages context for one-command provider switching |
-| ⬜ | Browser companion extension (MV3) — auto-ingest usage bars from claude.ai / chat.openai.com / gemini.google.com |
-| ⬜ | Cost forecasting + anomaly detection |
-| ⬜ | Self-hosted Helm chart / Railway one-click deploy |
+| ✅ | Browser companion extension (MV3) — auto-ingest usage bars from claude.ai / chat.openai.com / gemini.google.com |
+| ✅ | Cost forecasting + anomaly detection — `/analytics/forecast`, `/analytics/anomalies` (Z-score), Live Overview widgets |
+| ✅ | Self-hosted Helm chart / Railway one-click deploy |
+| ✅ | CLI auto-detection — VS Code terminal env injection, Claude CLI log watcher, shell profile setup, Source filter, CLI Activity card |
 
 ---
 

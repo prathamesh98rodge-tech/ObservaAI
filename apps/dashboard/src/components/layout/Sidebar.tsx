@@ -34,9 +34,13 @@ export function Sidebar() {
 
   return (
     <aside className="w-56 shrink-0 flex flex-col border-r border-[#1e1e2e] bg-[#0d0d14] p-4 gap-1">
-      <div className="mb-4 px-2">
-        <h1 className="text-lg font-bold text-indigo-400 tracking-tight">ObservaAI</h1>
-        <p className="text-[11px] text-slate-500">AI Usage Monitor</p>
+      <div className="mb-4 px-2 flex items-center gap-2.5">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo.svg" alt="ObservaAI" width={32} height={32} className="rounded-md shrink-0" />
+        <div className="min-w-0">
+          <h1 className="text-lg font-bold text-indigo-400 tracking-tight leading-tight">ObservaAI</h1>
+          <p className="text-[11px] text-slate-500">AI Usage Monitor</p>
+        </div>
       </div>
 
       {/* Team switcher */}
