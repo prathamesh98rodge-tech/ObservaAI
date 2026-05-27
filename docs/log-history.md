@@ -32,8 +32,8 @@ URLs: Gateway → http://localhost:8000 | Dashboard → http://localhost:3000
 | CI/CD | GitHub Actions: ci.yml, release-vscode.yml, release-jetbrains.yml | — |
 
 **Active branch:** `main`  
-**Last completed week:** Week 11b — Browser companion extension (MV3)  
-**Next up:** Week 12 — Cost forecasting + anomaly detection
+**Last completed week:** Week 12 — Cost forecasting + anomaly detection  
+**Next up:** Week 13 — Self-hosted Helm chart / Railway deploy button
 
 ---
 
@@ -239,6 +239,35 @@ ObservaAI/
 - **Error rate analytics**: `status_code INTEGER` column + migration 008; proxy router passes upstream status on every non-streaming request; `GET /analytics/errors` aggregates error/total counts per provider in Python; `fetchErrors()` added to dashboard api.ts
 - **CI fixes**: Removed explicit `version:` from `pnpm/action-setup@v4` in `ci.yml` and `release-vscode.yml` — action reads `packageManager` from `package.json` automatically; specifying both causes `ERR_PNPM_BAD_PM_VERSION`
 - **Tests**: 10 new tests for Week 10 features (context_window_pct, estimate_tokens, /estimate, /rate-limits, /errors)
+
+### Week 12 — Cost forecasting + anomaly detection
+
+**Gateway changes** (`apps/gateway/app/routers/analytics.py`)
+
+- `import statistics` added (stdlib — no new pip dep)
+- `GET /analytics/forecast?team_id=` — queries last 30 days of daily cost buckets, computes `daily_avg`, `weekly_projection` (×7), `monthly_projection` (×30); trend field compares last-7-day avg vs prior-7-day avg: `up` (>10%), `down` (<-10%), `stable`, `new` (insufficient history), `no_data`
+- `GET /analytics/anomalies?team_id=&limit=` — fetches last 200 requests, computes population mean + std of costs and token counts, flags any where Z-score ≥ 2.5; returns list with `type` (`cost_spike` / `token_spike`), `value`, `expected`, `z_score`, provider, model, timestamp; uses std lib `statistics` module
+
+**Dashboard changes**
+
+- `apps/dashboard/src/lib/api.ts`: `ForecastData` and `AnomalyEntry` interfaces; `fetchForecast()` and `fetchAnomalies()` helpers
+- `apps/dashboard/src/components/LiveOverview.tsx`:
+  - Two new `useQuery` hooks polling forecast (120 s) and anomalies (60 s)
+  - `ForecastWidget` — three projection cells (daily/weekly/monthly) + trend badge with `TrendingUp` / `TrendingDown` / `Minus` icon; only rendered when `days_sampled > 0`
+  - `AnomalyFeed` + `AnomalyRow` — yellow-tinted list of flagged requests showing value vs expected + Z-score; only rendered when anomalies are present
+
+**Tests** (`apps/gateway/tests/test_analytics_forecast.py`) — 9 tests:
+- forecast empty DB → `no_data` trend, zero projections
+- forecast response shape (all keys present)
+- forecast accepts `team_id` param
+- forecast after proxy requests → projections = `daily_avg × 7/30`, trend = `new`
+- anomalies empty DB → empty list, `baseline_n < 10`
+- anomalies response shape
+- anomalies accepts `limit` param
+- anomalies accepts `team_id` param
+- 12 identical-cost requests → std ≈ 0 → no anomalies flagged
+
+---
 
 ### Week 11b — Browser companion extension (MV3)
 
@@ -490,5 +519,5 @@ Once 11b is running, the manual "Update Subscription Usage" VS Code command and 
 | 10 | Context window %, cache expiry, rate-limit windows, /estimate | ✅ |
 | 11a | Subscription capacity tracking + provider handover | ✅ |
 | 11b | Browser companion extension (MV3) — auto-ingest from claude.ai / ChatGPT / Gemini | ✅ |
-| 12 | Cost forecasting + anomaly detection | ⬜ |
+| 12 | Cost forecasting + anomaly detection | ✅ |
 | 13 | Self-hosted Helm chart / Railway deploy button | ⬜ |

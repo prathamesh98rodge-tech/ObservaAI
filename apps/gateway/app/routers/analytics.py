@@ -1,3 +1,4 @@
+import statistics
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
@@ -391,3 +392,157 @@ async def error_rate(
         }
         for p in sorted(totals)
     ]
+
+
+@router.get("/forecast")
+async def cost_forecast(
+    team_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Daily cost projection from the last 30 days of activity.
+    Returns daily_avg, weekly/monthly projections, and trend vs the prior period.
+    """
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=30)
+    tf = _team_session_filter(team_id)
+
+    day_bucket = _time_bucket("day", Request.created_at)
+    stmt = (
+        select(day_bucket, func.sum(Request.estimated_cost).label("cost"))
+        .where(Request.created_at >= cutoff)
+        .group_by(day_bucket)
+        .order_by(day_bucket.asc())
+    )
+    if tf is not None:
+        stmt = stmt.where(tf)
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    daily_costs = [float(r.cost or 0.0) for r in rows]
+    n = len(daily_costs)
+
+    if n == 0:
+        return {
+            "daily_avg": 0.0,
+            "weekly_projection": 0.0,
+            "monthly_projection": 0.0,
+            "trend": "no_data",
+            "trend_pct": 0.0,
+            "days_sampled": 0,
+        }
+
+    daily_avg = sum(daily_costs) / n
+
+    # Trend: recent 7 days vs prior 7 days
+    recent7 = daily_costs[-7:]
+    prior7 = daily_costs[-14:-7] if n >= 14 else []
+
+    if prior7:
+        recent_avg = sum(recent7) / len(recent7)
+        prior_avg = sum(prior7) / len(prior7)
+        trend_pct = round((recent_avg - prior_avg) / prior_avg * 100, 1) if prior_avg > 0 else 0.0
+        if trend_pct > 10:
+            trend = "up"
+        elif trend_pct < -10:
+            trend = "down"
+        else:
+            trend = "stable"
+    else:
+        trend_pct = 0.0
+        trend = "new"
+
+    return {
+        "daily_avg": round(daily_avg, 6),
+        "weekly_projection": round(daily_avg * 7, 6),
+        "monthly_projection": round(daily_avg * 30, 6),
+        "trend": trend,
+        "trend_pct": trend_pct,
+        "days_sampled": n,
+    }
+
+
+@router.get("/anomalies")
+async def detect_anomalies(
+    team_id: str | None = Query(None),
+    limit: int = Query(10, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Flags requests whose cost or token count is more than 2.5 standard deviations
+    above the mean of the last 200 requests (Z-score anomaly detection).
+    """
+    tf = _team_session_filter(team_id)
+    stmt = (
+        select(Request)
+        .order_by(Request.created_at.desc())
+        .limit(200)
+    )
+    if tf is not None:
+        stmt = stmt.where(tf)
+    result = await db.execute(stmt)
+    reqs = result.scalars().all()  # most-recent first
+
+    if len(reqs) < 10:
+        return {"anomalies": [], "baseline_n": len(reqs), "cost_mean": 0.0, "cost_std": 0.0}
+
+    costs = [float(r.estimated_cost or 0.0) for r in reqs]
+    tokens = [(r.input_tokens or 0) + (r.output_tokens or 0) for r in reqs]
+
+    cost_mean = statistics.mean(costs)
+    cost_std = statistics.stdev(costs) if len(costs) > 1 else 0.0
+    tok_mean = statistics.mean(tokens)
+    tok_std = statistics.stdev(tokens) if len(tokens) > 1 else 0.0
+
+    THRESHOLD = 2.5
+    found = []
+
+    for req in reqs:  # already most-recent first
+        c = float(req.estimated_cost or 0.0)
+        t = (req.input_tokens or 0) + (req.output_tokens or 0)
+
+        if cost_std > 0 and c > cost_mean:
+            z = (c - cost_mean) / cost_std
+            if z >= THRESHOLD:
+                found.append({
+                    "request_id": req.id,
+                    "provider": req.provider,
+                    "model": req.model,
+                    "created_at": req.created_at.isoformat(),
+                    "input_tokens": req.input_tokens or 0,
+                    "output_tokens": req.output_tokens or 0,
+                    "cost_usd": round(c, 6),
+                    "type": "cost_spike",
+                    "value": round(c, 6),
+                    "expected": round(cost_mean, 6),
+                    "z_score": round(z, 2),
+                })
+                if len(found) >= limit:
+                    break
+                continue
+
+        if tok_std > 0 and t > tok_mean:
+            z = (t - tok_mean) / tok_std
+            if z >= THRESHOLD:
+                found.append({
+                    "request_id": req.id,
+                    "provider": req.provider,
+                    "model": req.model,
+                    "created_at": req.created_at.isoformat(),
+                    "input_tokens": req.input_tokens or 0,
+                    "output_tokens": req.output_tokens or 0,
+                    "cost_usd": round(c, 6),
+                    "type": "token_spike",
+                    "value": t,
+                    "expected": round(tok_mean, 1),
+                    "z_score": round(z, 2),
+                })
+                if len(found) >= limit:
+                    break
+
+    return {
+        "anomalies": found,
+        "baseline_n": len(reqs),
+        "cost_mean": round(cost_mean, 6),
+        "cost_std": round(cost_std, 6),
+    }

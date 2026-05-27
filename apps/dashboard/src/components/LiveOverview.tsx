@@ -4,9 +4,10 @@ import { useLiveMetrics } from "@/hooks/useLiveMetrics";
 import { useMetricsStore } from "@/lib/store";
 import { formatCost, formatTokens, formatLatency, PROVIDER_COLORS } from "@/lib/utils";
 import { TokenUsageChart } from "@/components/charts/TokenUsageChart";
-import { Activity, DollarSign, Zap, Layers } from "lucide-react";
+import { Activity, DollarSign, Zap, Layers, TrendingUp, TrendingDown, Minus, AlertTriangle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchRateLimits } from "@/lib/api";
+import { fetchRateLimits, fetchForecast, fetchAnomalies } from "@/lib/api";
+import type { ForecastData, AnomalyEntry } from "@/lib/api";
 import type { TokenUsageSummary } from "@observaai/shared-types";
 
 interface RateLimitEntry {
@@ -24,6 +25,16 @@ export function LiveOverview() {
   const { data: rateLimits } = useQuery<RateLimitEntry[]>({
     queryKey: ["rate-limits"],
     queryFn: () => fetchRateLimits(),
+    refetchInterval: 60_000,
+  });
+  const { data: forecast } = useQuery<ForecastData>({
+    queryKey: ["forecast"],
+    queryFn: () => fetchForecast(),
+    refetchInterval: 120_000,
+  });
+  const { data: anomalyData } = useQuery<{ anomalies: AnomalyEntry[]; baseline_n: number }>({
+    queryKey: ["anomalies"],
+    queryFn: () => fetchAnomalies(),
     refetchInterval: 60_000,
   });
 
@@ -123,6 +134,16 @@ export function LiveOverview() {
           </div>
         </div>
       )}
+
+      {/* Cost forecast */}
+      {forecast && forecast.days_sampled > 0 && (
+        <ForecastWidget forecast={forecast} />
+      )}
+
+      {/* Anomaly feed */}
+      {anomalyData && anomalyData.anomalies.length > 0 && (
+        <AnomalyFeed anomalies={anomalyData.anomalies} />
+      )}
     </div>
   );
 }
@@ -204,6 +225,93 @@ function RateLimitRow({ entry }: { entry: RateLimitEntry }) {
           <p className="text-indigo-400">{formatTokens(entry.tokens_7d)}</p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ForecastWidget({ forecast }: { forecast: ForecastData }) {
+  const TrendIcon =
+    forecast.trend === "up" ? TrendingUp :
+    forecast.trend === "down" ? TrendingDown : Minus;
+  const trendColor =
+    forecast.trend === "up" ? "text-red-400" :
+    forecast.trend === "down" ? "text-emerald-400" : "text-slate-400";
+  const trendLabel =
+    forecast.trend === "up" ? `+${forecast.trend_pct}% vs last week` :
+    forecast.trend === "down" ? `${forecast.trend_pct}% vs last week` :
+    forecast.trend === "stable" ? "Stable vs last week" : "New — not enough history";
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-slate-300">Cost Forecast</h3>
+        <div className={`flex items-center gap-1 text-xs font-medium ${trendColor}`}>
+          <TrendIcon size={13} />
+          <span>{trendLabel}</span>
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        <ForecastCell label="Daily avg" value={formatCost(forecast.daily_avg)} />
+        <ForecastCell label="This week" value={formatCost(forecast.weekly_projection)} accent />
+        <ForecastCell label="This month" value={formatCost(forecast.monthly_projection)} />
+      </div>
+      <p className="text-[10px] text-slate-600 mt-3">
+        Based on {forecast.days_sampled} day{forecast.days_sampled !== 1 ? "s" : ""} of data
+      </p>
+    </div>
+  );
+}
+
+function ForecastCell({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className={`rounded-lg p-3 text-center ${accent ? "bg-emerald-500/10 border border-emerald-500/20" : "bg-white/5"}`}>
+      <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">{label}</p>
+      <p className={`text-base font-bold font-mono ${accent ? "text-emerald-400" : "text-slate-200"}`}>{value}</p>
+    </div>
+  );
+}
+
+function AnomalyFeed({ anomalies }: { anomalies: AnomalyEntry[] }) {
+  return (
+    <div className="card p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <AlertTriangle size={14} className="text-yellow-400" />
+        <h3 className="text-sm font-semibold text-slate-300">Anomalies Detected</h3>
+        <span className="ml-auto text-xs text-yellow-400 font-mono">{anomalies.length} flagged</span>
+      </div>
+      <div className="space-y-2">
+        {anomalies.map((a) => (
+          <AnomalyRow key={`${a.request_id}-${a.type}`} anomaly={a} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AnomalyRow({ anomaly: a }: { anomaly: AnomalyEntry }) {
+  const isCost = a.type === "cost_spike";
+  const color = PROVIDER_COLORS[a.provider] ?? "#64748b";
+  const ts = new Date(a.created_at);
+  const ago = Math.round((Date.now() - ts.getTime()) / 60_000);
+  const agoLabel = ago < 60 ? `${ago}m ago` : `${Math.floor(ago / 60)}h ago`;
+
+  return (
+    <div className="flex items-center gap-3 p-2.5 rounded-lg bg-yellow-500/5 border border-yellow-500/15 text-xs">
+      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+      <div className="flex-1 min-w-0">
+        <span className="text-slate-300 capitalize font-medium">{a.provider}</span>
+        <span className="text-slate-500 font-mono ml-1.5">{a.model}</span>
+      </div>
+      <div className="text-right font-mono">
+        <p className="text-yellow-300">
+          {isCost ? formatCost(a.value) : `${a.value.toLocaleString()} tok`}
+          <span className="text-slate-500 ml-1">({a.z_score}σ)</span>
+        </p>
+        <p className="text-slate-600 text-[10px]">
+          expected {isCost ? formatCost(a.expected) : `${Math.round(a.expected).toLocaleString()} tok`}
+        </p>
+      </div>
+      <span className="text-slate-600 shrink-0 w-12 text-right">{agoLabel}</span>
     </div>
   );
 }

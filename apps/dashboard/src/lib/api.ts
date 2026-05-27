@@ -67,6 +67,49 @@ export async function fetchErrors(teamId?: string | null) {
   return res.json();
 }
 
+// ── forecast + anomaly API ────────────────────────────────────────────────────
+
+export interface ForecastData {
+  daily_avg: number;
+  weekly_projection: number;
+  monthly_projection: number;
+  trend: "up" | "down" | "stable" | "new" | "no_data";
+  trend_pct: number;
+  days_sampled: number;
+}
+
+export interface AnomalyEntry {
+  request_id: string;
+  provider: string;
+  model: string;
+  created_at: string;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+  type: "cost_spike" | "token_spike";
+  value: number;
+  expected: number;
+  z_score: number;
+}
+
+export async function fetchForecast(teamId?: string | null): Promise<ForecastData> {
+  const params = new URLSearchParams();
+  if (teamId) params.set("team_id", teamId);
+  const res = await fetch(`${GATEWAY_URL}/analytics/forecast?${params}`);
+  if (!res.ok) throw new Error("Failed to fetch forecast");
+  return res.json();
+}
+
+export async function fetchAnomalies(
+  teamId?: string | null
+): Promise<{ anomalies: AnomalyEntry[]; baseline_n: number; cost_mean: number; cost_std: number }> {
+  const params = new URLSearchParams();
+  if (teamId) params.set("team_id", teamId);
+  const res = await fetch(`${GATEWAY_URL}/analytics/anomalies?${params}`);
+  if (!res.ok) throw new Error("Failed to fetch anomalies");
+  return res.json();
+}
+
 // ── budget API ────────────────────────────────────────────────────────────────
 
 export interface BudgetCreate {
