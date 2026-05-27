@@ -1,10 +1,43 @@
 import * as vscode from "vscode";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import { MetricsPanelProvider } from "../providers/MetricsPanelProvider";
 import { ProxyUrlsProvider } from "../providers/ProxyUrlsProvider";
 import { StatusBarController } from "./StatusBarController";
 import { SessionManager } from "./SessionManager";
+import { ClaudeLogWatcher } from "./ClaudeLogWatcher";
 
 let statusBar: StatusBarController | undefined;
+let cliStatusBar: vscode.StatusBarItem | undefined;
+
+function getGatewayUrl(): string {
+  return vscode.workspace
+    .getConfiguration("observaai")
+    .get<string>("gatewayUrl", "http://localhost:8000");
+}
+
+function getCLIEnvVars(): Record<string, string> {
+  const base = getGatewayUrl();
+  return {
+    ANTHROPIC_BASE_URL: `${base}/proxy/anthropic`,
+    OPENAI_BASE_URL: `${base}/proxy/openai/v1`,
+    GEMINI_API_BASE: `${base}/proxy/gemini/v1beta`,
+  };
+}
+
+function updateCliStatusBar(enabled: boolean): void {
+  if (!cliStatusBar) return;
+  if (enabled) {
+    cliStatusBar.text = "$(circle-filled) CLI proxy: active";
+    cliStatusBar.tooltip = "ObservaAI is injecting env vars into new terminals. Click to toggle.";
+    cliStatusBar.backgroundColor = undefined;
+  } else {
+    cliStatusBar.text = "$(circle-outline) CLI proxy: off";
+    cliStatusBar.tooltip = "ObservaAI CLI proxy is disabled. Click to enable.";
+    cliStatusBar.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
+  }
+}
 
 export function activate(context: vscode.ExtensionContext) {
   const session = new SessionManager();
@@ -12,6 +45,37 @@ export function activate(context: vscode.ExtensionContext) {
 
   const metricsProvider = new MetricsPanelProvider(context.extensionUri, session);
   const proxyProvider = new ProxyUrlsProvider(context.extensionUri, session);
+
+  // CLI proxy status bar
+  cliStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
+  cliStatusBar.command = "observaai.toggleCliProxy";
+  context.subscriptions.push(cliStatusBar);
+  const cliProxyEnabled = context.globalState.get<boolean>("observaai.cliProxyEnabled", true);
+  updateCliStatusBar(cliProxyEnabled);
+  cliStatusBar.show();
+
+  // Claude CLI log watcher
+  const logWatcher = new ClaudeLogWatcher(context, getGatewayUrl);
+  logWatcher.start();
+
+  // Inject env vars into every new terminal when CLI proxy is enabled
+  context.subscriptions.push(
+    vscode.window.onDidOpenTerminal((terminal) => {
+      const enabled = context.globalState.get<boolean>("observaai.cliProxyEnabled", true);
+      if (!enabled) return;
+      const vars = getCLIEnvVars();
+      // Use a small delay so the shell is ready before we send text
+      setTimeout(() => {
+        for (const [key, val] of Object.entries(vars)) {
+          if (process.platform === "win32") {
+            terminal.sendText(`$env:${key} = "${val}"`, true);
+          } else {
+            terminal.sendText(`export ${key}="${val}"`, true);
+          }
+        }
+      }, 500);
+    }),
+  );
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("observaai.metrics", metricsProvider),
@@ -147,6 +211,75 @@ export function activate(context: vscode.ExtensionContext) {
       } catch {
         vscode.window.showErrorMessage("ObservaAI: Could not generate handover document.");
       }
+    }),
+
+    vscode.commands.registerCommand("observaai.toggleCliProxy", async () => {
+      const current = context.globalState.get<boolean>("observaai.cliProxyEnabled", true);
+      const next = !current;
+      await context.globalState.update("observaai.cliProxyEnabled", next);
+      updateCliStatusBar(next);
+      vscode.window.showInformationMessage(
+        next
+          ? "ObservaAI: CLI proxy enabled — new terminals will have env vars injected."
+          : "ObservaAI: CLI proxy disabled — new terminals will not be modified.",
+      );
+    }),
+
+    vscode.commands.registerCommand("observaai.configureShellForCli", async () => {
+      const gatewayUrl = getGatewayUrl();
+      let exports: Record<string, string>;
+      try {
+        const res = await fetch(`${gatewayUrl}/setup/shell-exports`);
+        if (!res.ok) throw new Error();
+        const data = await res.json() as { exports: Record<string, string> };
+        exports = data.exports;
+      } catch {
+        vscode.window.showErrorMessage("ObservaAI: Cannot reach gateway to fetch shell exports.");
+        return;
+      }
+
+      const shellPick = await vscode.window.showQuickPick(
+        ["bash / zsh", "fish", "PowerShell"],
+        { placeHolder: "Select your default shell" },
+      );
+      if (!shellPick) return;
+
+      let profileFile: string;
+      let block: string;
+      const home = os.homedir();
+      if (shellPick === "bash / zsh") {
+        block = exports["bash_zsh"];
+        const shell = process.env.SHELL ?? "";
+        profileFile = shell.includes("zsh")
+          ? path.join(home, ".zshrc")
+          : path.join(home, ".bashrc");
+      } else if (shellPick === "fish") {
+        block = exports["fish"];
+        profileFile = path.join(home, ".config", "fish", "config.fish");
+      } else {
+        block = exports["powershell"];
+        const psProfile = process.env.POSH_THEME
+          ? path.join(home, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1")
+          : path.join(home, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1");
+        profileFile = psProfile;
+      }
+
+      const marker = "# ObservaAI CLI detection";
+      let existing = "";
+      try { existing = fs.readFileSync(profileFile, "utf8"); } catch { /* new file */ }
+
+      if (existing.includes(marker)) {
+        vscode.window.showInformationMessage(
+          `ObservaAI: CLI detection block already present in ${profileFile} — no changes made.`,
+        );
+        return;
+      }
+
+      fs.mkdirSync(path.dirname(profileFile), { recursive: true });
+      fs.appendFileSync(profileFile, `\n${block}\n`);
+      vscode.window.showInformationMessage(
+        `ObservaAI: Export block appended to ${profileFile}. Restart your terminal to activate.`,
+      );
     }),
 
     vscode.commands.registerCommand("observaai.copyProxyUrl", async (provider?: string) => {

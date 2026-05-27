@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
 
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]
+    gateway_url: str = "http://localhost:8000"
 
 
 settings = Settings()

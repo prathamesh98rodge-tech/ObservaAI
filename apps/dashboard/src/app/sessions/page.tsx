@@ -4,7 +4,9 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchSessions, fetchRequests } from "@/lib/api";
 import { formatCost, formatTokens, formatLatency, PROVIDER_COLORS } from "@/lib/utils";
-import { ChevronDown, ChevronRight, History } from "lucide-react";
+import { ChevronDown, ChevronRight, History, Terminal } from "lucide-react";
+
+type SourceFilter = "all" | "proxy" | "cli-log" | "manual";
 
 // API returns snake_case — define local types matching the actual JSON
 interface ApiSession {
@@ -16,6 +18,7 @@ interface ApiRequest {
   input_tokens: number; output_tokens: number; latency_ms: number;
   estimated_cost: number; streaming: boolean; created_at: string;
   context_pct: number | null; cache_active: boolean | null; status_code: number | null;
+  source: string;
 }
 
 function formatDateTime(iso: string): string {
@@ -48,8 +51,16 @@ function formatDuration(startIso: string, endIso?: string): string {
   }
 }
 
+const SOURCE_FILTERS: { value: SourceFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "proxy", label: "Proxy" },
+  { value: "cli-log", label: "CLI" },
+  { value: "manual", label: "Manual" },
+];
+
 export default function SessionsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
 
   const { data: sessionsData, isLoading: sessionsLoading } = useQuery<ApiSession[]>({
     queryKey: ["sessions"],
@@ -58,8 +69,8 @@ export default function SessionsPage() {
   });
 
   const { data: requestsData, isLoading: requestsLoading } = useQuery<ApiRequest[]>({
-    queryKey: ["requests"],
-    queryFn: () => fetchRequests(),
+    queryKey: ["requests", sourceFilter],
+    queryFn: () => fetchRequests(undefined, undefined, sourceFilter === "all" ? undefined : sourceFilter),
     refetchInterval: 15_000,
   });
 
@@ -79,9 +90,28 @@ export default function SessionsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-slate-100">Sessions</h2>
-        <p className="text-sm text-slate-500 mt-1">Session history and per-request details</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-100">Sessions</h2>
+          <p className="text-sm text-slate-500 mt-1">Session history and per-request details</p>
+        </div>
+        {/* Source filter chips */}
+        <div className="flex items-center gap-1.5">
+          {SOURCE_FILTERS.map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setSourceFilter(value)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                sourceFilter === value
+                  ? "bg-indigo-600 text-white"
+                  : "bg-white/5 text-slate-400 hover:bg-white/10"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Sessions table */}
@@ -178,7 +208,12 @@ export default function SessionsPage() {
                                   style={{ background: color }}
                                 />
                                 <div className="min-w-0">
-                                  <p className="capitalize text-slate-200 text-xs">{req.provider}</p>
+                                  <div className="flex items-center gap-1.5">
+                                    <p className="capitalize text-slate-200 text-xs">{req.provider}</p>
+                                    {req.source === "cli-log" && (
+                                      <Terminal size={10} className="text-cyan-400 shrink-0" />
+                                    )}
+                                  </div>
                                   <p className="font-mono text-[10px] text-slate-500 truncate">{req.model}</p>
                                 </div>
                               </div>

@@ -80,6 +80,15 @@
         "command": "observaai.prepareHandover",
         "title": "ObservaAI: Prepare Handover (Switch Provider)",
         "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "observaai.toggleCliProxy",
+        "title": "ObservaAI: Toggle CLI Proxy",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "observaai.configureShellForCli",
+        "title": "ObservaAI: Configure Shell for CLI Detection"
       }
     ],
     "menus": {
@@ -95,6 +104,21 @@
           "group": "navigation"
         }
       ]
+    },
+    "terminal.integrated.env.linux": {
+      "ANTHROPIC_BASE_URL": "http://localhost:8000/proxy/anthropic",
+      "OPENAI_BASE_URL": "http://localhost:8000/proxy/openai/v1",
+      "GEMINI_API_BASE": "http://localhost:8000/proxy/gemini/v1beta"
+    },
+    "terminal.integrated.env.osx": {
+      "ANTHROPIC_BASE_URL": "http://localhost:8000/proxy/anthropic",
+      "OPENAI_BASE_URL": "http://localhost:8000/proxy/openai/v1",
+      "GEMINI_API_BASE": "http://localhost:8000/proxy/gemini/v1beta"
+    },
+    "terminal.integrated.env.windows": {
+      "ANTHROPIC_BASE_URL": "http://localhost:8000/proxy/anthropic",
+      "OPENAI_BASE_URL": "http://localhost:8000/proxy/openai/v1",
+      "GEMINI_API_BASE": "http://localhost:8000/proxy/gemini/v1beta"
     },
     "configuration": {
       "title": "ObservaAI",

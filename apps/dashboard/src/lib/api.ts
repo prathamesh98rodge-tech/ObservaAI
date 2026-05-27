@@ -28,13 +28,20 @@ export async function fetchSessions(teamId?: string | null) {
   return res.json();
 }
 
-export async function fetchRequests(sessionId?: string, teamId?: string | null) {
+export async function fetchRequests(sessionId?: string, teamId?: string | null, source?: string) {
   const params = new URLSearchParams();
   if (sessionId) params.set("session_id", sessionId);
   if (teamId) params.set("team_id", teamId);
+  if (source && source !== "all") params.set("source", source);
   const res = await fetch(`${GATEWAY_URL}/analytics/requests?${params}`);
   if (!res.ok) throw new Error("Failed to fetch requests");
   return res.json();
+}
+
+export interface CliActivity {
+  detected: string[];
+  tokensToday: number;
+  lastSeenAt: string | null;
 }
 
 export async function fetchTimeline(granularity: "minute" | "hour" | "day" = "hour", teamId?: string | null) {

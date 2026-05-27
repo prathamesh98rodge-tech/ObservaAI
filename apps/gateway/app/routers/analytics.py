@@ -1,8 +1,10 @@
 import statistics
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, cast, String
 
@@ -69,12 +71,15 @@ async def list_sessions(
 async def list_requests(
     session_id: str | None = Query(None),
     team_id: str | None = Query(None),
+    source: str | None = Query(None),
     limit: int = Query(100, le=500),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(Request).order_by(Request.created_at.desc()).limit(limit)
     if session_id:
         stmt = stmt.where(Request.session_id == session_id)
+    if source:
+        stmt = stmt.where(Request.source == source)
     tf = _team_session_filter(team_id)
     if tf is not None:
         stmt = stmt.where(tf)
@@ -97,6 +102,7 @@ async def list_requests(
             "cache_expires_at": r.cache_expires_at.isoformat() if r.cache_expires_at else None,
             "cache_active": (r.cache_expires_at is not None and r.cache_expires_at > now),
             "status_code": r.status_code,
+            "source": r.source,
             "session_id": r.session_id,
             "created_at": r.created_at.isoformat(),
         }
@@ -317,12 +323,38 @@ async def live_metrics(
     ]
     total_tokens = sum(u["totalInputTokens"] + u["totalOutputTokens"] for u in usage)
     total_cost = sum(u["totalCost"] for u in usage)
+
+    # CLI activity aggregation
+    now_live = datetime.now(timezone.utc)
+    today_start = now_live.replace(hour=0, minute=0, second=0, microsecond=0)
+    cli_stmt = (
+        select(
+            Request.provider,
+            func.sum(Request.input_tokens + Request.output_tokens).label("tokens"),
+            func.max(Request.created_at).label("last_seen"),
+        )
+        .where(Request.source == "cli-log")
+        .where(Request.created_at >= today_start)
+        .group_by(Request.provider)
+    )
+    if tf is not None:
+        cli_stmt = cli_stmt.where(tf)
+    cli_rows = (await db.execute(cli_stmt)).all()
+    cli_detected = [r.provider for r in cli_rows]
+    cli_tokens_today = sum(r.tokens or 0 for r in cli_rows)
+    cli_last_seen = max((r.last_seen for r in cli_rows), default=None)
+
     return {
         "sessionTokens": total_tokens,
         "sessionCost": round(total_cost, 6),
         "avgLatencyMs": round(sum(u["avgLatencyMs"] for u in usage) / len(usage), 1) if usage else 0,
         "requestsInFlight": 0,
         "usageByProvider": usage,
+        "cliActivity": {
+            "detected": cli_detected,
+            "tokensToday": cli_tokens_today,
+            "lastSeenAt": cli_last_seen.isoformat() if cli_last_seen else None,
+        },
     }
 
 
@@ -546,3 +578,63 @@ async def detect_anomalies(
         "cost_mean": round(cost_mean, 6),
         "cost_std": round(cost_std, 6),
     }
+
+
+class CliIngestPayload(BaseModel):
+    provider: str
+    model: str
+    input_tokens: int
+    output_tokens: int
+    timestamp: str | None = None
+    workspace: str = "default"
+    team_id: str | None = None
+
+
+@router.post("/ingest-cli", status_code=201)
+async def ingest_cli(
+    payload: CliIngestPayload,
+    db: AsyncSession = Depends(get_db),
+):
+    """Accept token usage reported by the VS Code CLI log watcher and store it as source='cli-log'."""
+    from app.models.request import Request as Req, Session
+    from app.services.session_service import get_or_create_session
+    from app.services.pricing import estimate_cost
+
+    cost = estimate_cost(payload.provider, payload.model, payload.input_tokens, payload.output_tokens)
+    session_id = await get_or_create_session(db, payload.workspace, team_id=payload.team_id)
+
+    ts = datetime.now(timezone.utc)
+    if payload.timestamp:
+        try:
+            ts = datetime.fromisoformat(payload.timestamp.replace("Z", "+00:00"))
+        except ValueError:
+            pass
+
+    req = Req(
+        id=str(uuid.uuid4()),
+        provider=payload.provider,
+        model=payload.model,
+        input_tokens=payload.input_tokens,
+        output_tokens=payload.output_tokens,
+        cached_tokens=0,
+        reasoning_tokens=0,
+        cache_savings_usd=0.0,
+        latency_ms=0,
+        estimated_cost=cost,
+        streaming=False,
+        source="cli-log",
+        created_at=ts,
+        session_id=session_id,
+    )
+    db.add(req)
+    from sqlalchemy import update
+    await db.execute(
+        update(Session)
+        .where(Session.id == session_id)
+        .values(
+            total_tokens=Session.total_tokens + payload.input_tokens + payload.output_tokens,
+            total_cost=Session.total_cost + cost,
+        )
+    )
+    await db.commit()
+    return {"id": req.id, "cost": round(cost, 6)}

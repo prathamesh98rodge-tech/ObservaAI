@@ -29,6 +29,7 @@ async def record_request(
     temperature: float | None = None,
     team_id: str | None = None,
     status_code: int | None = None,
+    source: str = "proxy",
 ) -> Request:
     model = usage.model or "unknown"
     cost = estimate_cost(provider, model, usage.input_tokens, usage.output_tokens)
@@ -59,6 +60,7 @@ async def record_request(
         context_pct=ctx_pct,
         cache_expires_at=cache_expires_at,
         status_code=status_code,
+        source=source,
         created_at=now,
         session_id=session_id,
     )

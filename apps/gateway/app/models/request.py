@@ -41,6 +41,7 @@ class Request(Base):
     context_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     cache_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source: Mapped[str] = mapped_column(String(20), default="proxy")
 
     session_id: Mapped[str] = mapped_column(String, ForeignKey("sessions.id"))
     session: Mapped["Session"] = relationship("Session", back_populates="requests")

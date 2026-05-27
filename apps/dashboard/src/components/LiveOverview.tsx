@@ -4,10 +4,10 @@ import { useLiveMetrics } from "@/hooks/useLiveMetrics";
 import { useMetricsStore } from "@/lib/store";
 import { formatCost, formatTokens, formatLatency, PROVIDER_COLORS } from "@/lib/utils";
 import { TokenUsageChart } from "@/components/charts/TokenUsageChart";
-import { Activity, DollarSign, Zap, Layers, TrendingUp, TrendingDown, Minus, AlertTriangle } from "lucide-react";
+import { Activity, DollarSign, Zap, Layers, TrendingUp, TrendingDown, Minus, AlertTriangle, Terminal } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchRateLimits, fetchForecast, fetchAnomalies } from "@/lib/api";
-import type { ForecastData, AnomalyEntry } from "@/lib/api";
+import { fetchRateLimits, fetchForecast, fetchAnomalies, fetchLiveMetrics } from "@/lib/api";
+import type { ForecastData, AnomalyEntry, CliActivity } from "@/lib/api";
 import type { TokenUsageSummary } from "@observaai/shared-types";
 
 interface RateLimitEntry {
@@ -37,6 +37,14 @@ export function LiveOverview() {
     queryFn: () => fetchAnomalies(),
     refetchInterval: 60_000,
   });
+  const { data: liveRest } = useQuery<{ cliActivity: CliActivity }>({
+    queryKey: ["live-cli"],
+    queryFn: () => fetchLiveMetrics(),
+    refetchInterval: 30_000,
+  });
+  const cliActivity: CliActivity = (data as { cliActivity?: CliActivity })?.cliActivity
+    ?? liveRest?.cliActivity
+    ?? { detected: [], tokensToday: 0, lastSeenAt: null };
 
   // Prefer WS data; fall back to REST
   const data = wsMetrics ?? restData;
@@ -144,6 +152,9 @@ export function LiveOverview() {
       {anomalyData && anomalyData.anomalies.length > 0 && (
         <AnomalyFeed anomalies={anomalyData.anomalies} />
       )}
+
+      {/* CLI Activity */}
+      <CliActivityCard activity={cliActivity} />
     </div>
   );
 }
@@ -334,6 +345,61 @@ function EmptyState() {
     <div className="flex flex-col items-center justify-center h-64 gap-3 text-slate-500">
       <Activity size={32} />
       <p className="text-sm">Gateway offline — start the gateway to see live metrics.</p>
+    </div>
+  );
+}
+
+function CliActivityCard({ activity }: { activity: CliActivity }) {
+  const { detected, tokensToday, lastSeenAt } = activity;
+  const hasActivity = detected.length > 0 || tokensToday > 0;
+  const lastSeen = lastSeenAt
+    ? new Date(lastSeenAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
+    : null;
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <Terminal size={16} className="text-cyan-400" />
+        <h3 className="text-sm font-semibold text-slate-300">CLI Activity</h3>
+        {hasActivity && (
+          <span className="ml-auto inline-flex items-center gap-1 text-xs text-cyan-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+            detected
+          </span>
+        )}
+      </div>
+      {!hasActivity ? (
+        <p className="text-xs text-slate-500">
+          No CLI activity today. Install the VS Code extension and open a terminal to auto-route Claude CLI,
+          Codex CLI, or Gemini CLI through ObservaAI.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {detected.map((cli) => (
+              <span
+                key={cli}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-500/10 text-cyan-300 text-xs font-medium"
+              >
+                <Terminal size={10} />
+                {cli}
+              </span>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-4 pt-1">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-0.5">Tokens today</p>
+              <p className="text-lg font-mono text-cyan-400">{tokensToday.toLocaleString()}</p>
+            </div>
+            {lastSeen && (
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-0.5">Last seen</p>
+                <p className="text-lg font-mono text-slate-300">{lastSeen}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

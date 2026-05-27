@@ -14,6 +14,7 @@ from app.routers.teams import router as teams_router
 from app.routers.estimate import router as estimate_router
 from app.routers.subscriptions import router as subscriptions_router
 from app.routers.handover import router as handover_router
+from app.routers.setup import router as setup_router
 from app.adapters.registry import known_providers
 from app.services.session_service import reset_all_sessions
 
@@ -49,6 +50,7 @@ app.include_router(teams_router)
 app.include_router(estimate_router)
 app.include_router(subscriptions_router)
 app.include_router(handover_router)
+app.include_router(setup_router)
 
 
 @app.get("/providers")
