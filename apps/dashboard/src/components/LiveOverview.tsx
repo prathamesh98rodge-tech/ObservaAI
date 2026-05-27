@@ -42,12 +42,11 @@ export function LiveOverview() {
     queryFn: () => fetchLiveMetrics(),
     refetchInterval: 30_000,
   });
-  const cliActivity: CliActivity = (data as { cliActivity?: CliActivity })?.cliActivity
-    ?? liveRest?.cliActivity
-    ?? { detected: [], tokensToday: 0, lastSeenAt: null };
 
   // Prefer WS data; fall back to REST
   const data = wsMetrics ?? restData;
+  const cliActivity: CliActivity = liveRest?.cliActivity
+    ?? { detected: [], tokensToday: 0, lastSeenAt: null };
 
   if (!wsMetrics && isLoading) return <LoadingState />;
   if (!wsMetrics && error && !data) return <EmptyState />;

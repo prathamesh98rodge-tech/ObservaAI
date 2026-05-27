@@ -484,10 +484,11 @@ async def cost_forecast(
         trend_pct = 0.0
         trend = "new"
 
+    daily_avg_r = round(daily_avg, 6)
     return {
-        "daily_avg": round(daily_avg, 6),
-        "weekly_projection": round(daily_avg * 7, 6),
-        "monthly_projection": round(daily_avg * 30, 6),
+        "daily_avg": daily_avg_r,
+        "weekly_projection": round(daily_avg_r * 7, 6),
+        "monthly_projection": round(daily_avg_r * 30, 6),
         "trend": trend,
         "trend_pct": trend_pct,
         "days_sampled": n,

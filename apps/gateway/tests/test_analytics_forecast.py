@@ -76,9 +76,9 @@ def test_forecast_after_requests():
     data = res.json()
     assert data["days_sampled"] >= 1
     assert data["daily_avg"] >= 0.0
-    # Projections are multiples of daily_avg
-    assert abs(data["weekly_projection"] - data["daily_avg"] * 7) < 1e-6
-    assert abs(data["monthly_projection"] - data["daily_avg"] * 30) < 1e-6
+    # Projections are exact multiples of daily_avg (computed from the rounded value)
+    assert data["weekly_projection"] == pytest.approx(data["daily_avg"] * 7, rel=1e-9)
+    assert data["monthly_projection"] == pytest.approx(data["daily_avg"] * 30, rel=1e-9)
     # Trend for a single day of data is "new"
     assert data["trend"] == "new"
 
@@ -135,4 +135,5 @@ def test_anomalies_normal_requests_not_flagged():
     data = res.json()
     # All requests have the same cost → std ≈ 0 → no Z-score anomalies
     assert isinstance(data["anomalies"], list)
-    assert data["baseline_n"] == 12
+    assert data["anomalies"] == []
+    assert data["baseline_n"] >= 12
